@@ -221,7 +221,7 @@ app.get("/departments", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, 'http://safety.borneo.co.id', () => {
   console.log(`Server running on port ${PORT}`);
 });
