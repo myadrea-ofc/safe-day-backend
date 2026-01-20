@@ -144,7 +144,6 @@ app.post("/login", async (req, res) => {
 
     const user = result.rows[0];
 
-    // ✅ Gunakan bcrypt synchronous
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah" });
@@ -180,16 +179,23 @@ app.post("/login", async (req, res) => {
 
 app.get("/sites", async (req, res) => {
   try {
-     console.log("🔥 HIT /sites");
+    console.log("🔥 HIT /sites");
+
     const result = await pool.query(
-      `SELECT id, site_name FROM sites WHERE deleted_at IS NULL ORDER BY site_name ASC`
+      `SELECT id, site_name
+       FROM sites
+       WHERE deleted_at IS NULL
+       ORDER BY site_name ASC`
     );
+
     res.json(result.rows.map(r => ({ id: r.id, name: r.site_name })));
   } catch (err) {
     console.error("ERROR GET /sites:", err);
     res.status(500).json({ message: "Gagal mengambil sites", error: err.message });
   }
 });
+
+
 
 app.get("/departments", async (req, res) => {
   const { site_id } = req.query;
@@ -215,6 +221,12 @@ app.get("/departments", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, 'http://safety.borneo.co.id', () => {
+  console.log(`Server running on port ${PORT}`);
 });
+
+// const PORT = process.env.PORT || 3000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on http://localhost:${PORT}`);
+// });
+
