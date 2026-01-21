@@ -25,6 +25,11 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Ping endpoint untuk health check
+app.get("/ping", (req, res) => {
+  res.json({ message: "pong123" });
+});
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -260,7 +265,7 @@ app.post("/logout", authMiddleware, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, 'http://safety.borneo.co.id', () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
