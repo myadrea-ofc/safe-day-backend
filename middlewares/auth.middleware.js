@@ -3,6 +3,7 @@ const pool = require("../config/db");
 
 module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+
   if (!authHeader) {
     return res.status(401).json({ message: "Token tidak ditemukan" });
   }
@@ -10,6 +11,23 @@ module.exports = async (req, res, next) => {
   try {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const sessionCheck = await pool.query(
+      `
+      SELECT id
+      FROM user_sessions
+      WHERE user_id = $1
+        AND token = $2
+        AND is_active = true
+      `,
+      [decoded.id, token]
+    );
+
+    if (sessionCheck.rowCount === 0) {
+      return res.status(401).json({
+        message: "Session tidak valid atau sudah logout",
+      });
+    }
 
     const userQuery = await pool.query(
       `
@@ -34,7 +52,7 @@ module.exports = async (req, res, next) => {
       id: userQuery.rows[0].id,
       site_id: userQuery.rows[0].site_id,
       department_id: userQuery.rows[0].department_id,
-      role: userQuery.rows[0].role_name.toLowerCase(), // 🔥 penting
+      role: userQuery.rows[0].role_name.toLowerCase(),
     };
 
     next();
@@ -43,4 +61,3 @@ module.exports = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 };
-

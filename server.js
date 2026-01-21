@@ -1,7 +1,6 @@
 require("dotenv").config();
 const pool = require("./config/db");
 
-
 const authMiddleware = require("./middlewares/auth.middleware");
 const allowRoles = require("./middlewares/role.middleware");
 
@@ -71,6 +70,7 @@ const dailyPlanRoutes = require("./routes/event/hsesdailyplan.routes");
 const buletinRoutes = require("./routes/event/hsesbuletin.routes");
 
 const authRoutes = require("./routes/auth.routes");
+
 app.use("/auth", authRoutes);
 
 app.use("/api/events", eventRoutes);
@@ -115,13 +115,9 @@ app.post("/login", async (req, res) => {
 
     const { name, password, site_id, department_id } = req.body;
 
-    console.log("PASSWORD DITERIMA:", password);
-
     if (!name || !password || !site_id || !department_id) {
       return res.status(400).json({ message: "Data login tidak lengkap" });
     }
-
-    console.log("Login attempt:", { name, site_id, department_id });
 
     const result = await pool.query(
       `
@@ -138,8 +134,10 @@ app.post("/login", async (req, res) => {
       [name, site_id, department_id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ message: "User / site / department tidak cocok" });
+    if (result.rowCount === 0) {
+      return res.status(401).json({
+        message: "User / site / department tidak cocok",
+      });
     }
 
     const user = result.rows[0];
@@ -147,6 +145,21 @@ app.post("/login", async (req, res) => {
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah" });
+    }
+    const activeSession = await pool.query(
+      `
+      SELECT id
+      FROM user_sessions
+      WHERE user_id = $1
+        AND is_active = true
+      `,
+      [user.id]
+    );
+
+    if (activeSession.rowCount > 0) {
+      return res.status(403).json({
+        message: "User sedang login di device lain",
+      });
     }
 
     const token = jwt.sign(
@@ -161,7 +174,15 @@ app.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({
+    await pool.query(
+      `
+      INSERT INTO user_sessions (user_id, token)
+      VALUES ($1, $2)
+      `,
+      [user.id, token]
+    );
+
+    return res.json({
       token,
       user: {
         id: user.id,
@@ -173,9 +194,10 @@ app.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ message: "Login gagal" });
+    return res.status(500).json({ message: "Login gagal" });
   }
 });
+
 
 app.get("/sites", async (req, res) => {
   try {
@@ -194,8 +216,6 @@ app.get("/sites", async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil sites", error: err.message });
   }
 });
-
-
 
 app.get("/departments", async (req, res) => {
   const { site_id } = req.query;
@@ -220,13 +240,27 @@ app.get("/departments", async (req, res) => {
   }
 });
 
+
+
+app.post("/logout", authMiddleware, async (req, res) => {
+  const token = req.headers.authorization.split(" ")[1];
+
+  await pool.query(
+    `
+    UPDATE user_sessions
+    SET is_active = false,
+        expired_at = NOW()
+    WHERE user_id = $1
+      AND token = $2
+    `,
+    [req.user.id, token]
+  );
+
+  res.json({ message: "Logout berhasil" });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, 'http://safety.borneo.co.id', () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-// const PORT = process.env.PORT || 3000;
-// app.listen(PORT, () => {
-//   console.log(`Server running on http://localhost:${PORT}`);
-// });
 

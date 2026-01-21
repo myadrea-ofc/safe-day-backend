@@ -134,5 +134,46 @@ router.get(
   userController.getProfile
 );
 
+router.get(
+  "/",
+  authMiddleware,
+  allowRoles("admin", "superadmin"),
+  async (req, res) => {
+    console.log("🔥 HIT /users", req.query, req.user);
+    try {
+      const { site_id, department_id } = req.query;
+
+      if (!department_id) {
+        return res.status(400).json({ message: "Department wajib dipilih" });
+      }
+
+      let sql = `
+        SELECT id, name FROM users
+        WHERE department_id = $1
+          AND deleted_at IS NULL
+      `;
+      const params = [department_id];
+
+      if (req.user.role === "superadmin") {
+        if (site_id) {
+          sql += " AND site_id = $2";
+          params.push(site_id);
+        }
+      } else {
+        sql += " AND site_id = $2";
+        params.push(req.user.site_id);
+      }
+
+      const result = await pool.query(sql, params);
+      res.json(result.rows);
+    } catch (err) {
+      console.error("LIST USERS ERROR:", err);
+      res.status(500).json({ message: "Gagal mengambil daftar user" });
+    }
+  }
+);
+
+
+
 
 module.exports = router;
