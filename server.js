@@ -116,14 +116,13 @@ app.use("/hses_buletin", buletinRoutes);
 
 app.post("/login", async (req, res) => {
   try {
-    console.log("LOGIN RAW BODY:", req.body);
+    const { name, password, site_id, department_id, device_id } = req.body;
 
-    const { name, password, site_id, department_id } = req.body;
-
-    if (!name || !password || !site_id || !department_id) {
+    if (!name || !password || !site_id || !department_id || !device_id) {
       return res.status(400).json({ message: "Data login tidak lengkap" });
     }
 
+    // Cari user
     const result = await pool.query(
       `
       SELECT u.id, u.name, u.password,
@@ -131,13 +130,20 @@ app.post("/login", async (req, res) => {
              u.site_id, u.department_id
       FROM users u
       JOIN roles r ON r.id = u.role_id
-      WHERE upper(u.name) = upper($1)
+       WHERE trim(upper(u.name)) = trim(upper($1))
         AND u.site_id = $2
         AND u.department_id = $3
         AND u.deleted_at IS NULL
       `,
       [name, site_id, department_id]
     );
+
+    console.log("LOGIN CHECK:", {
+  name,
+  site_id,
+  department_id,
+});
+
 
     if (result.rowCount === 0) {
       return res.status(401).json({
@@ -147,26 +153,25 @@ app.post("/login", async (req, res) => {
 
     const user = result.rows[0];
 
+    // Cek password
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah" });
     }
-    const activeSession = await pool.query(
+
+    await pool.query(
       `
-      SELECT id
-      FROM user_sessions
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          expired_at = NOW()
       WHERE user_id = $1
         AND is_active = true
       `,
       [user.id]
     );
 
-    if (activeSession.rowCount > 0) {
-      return res.status(403).json({
-        message: "User sedang login di device lain",
-      });
-    }
-
+    // Generate token baru
     const token = jwt.sign(
       {
         id: user.id,
@@ -179,12 +184,14 @@ app.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
+    // Simpan session baru
     await pool.query(
       `
-      INSERT INTO user_sessions (user_id, token)
-      VALUES ($1, $2)
+      INSERT INTO user_sessions
+      (user_id, token, device_id, is_active, expired_at)
+      VALUES ($1, $2, $3, true, NOW() + INTERVAL '1 day')
       `,
-      [user.id, token]
+      [user.id, token, device_id]
     );
 
     return res.json({
@@ -245,24 +252,52 @@ app.get("/departments", async (req, res) => {
   }
 });
 
-
-
 app.post("/logout", authMiddleware, async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(400).json({ message: "Authorization header kosong" });
+    }
 
-  await pool.query(
-    `
-    UPDATE user_sessions
-    SET is_active = false,
-        expired_at = NOW()
-    WHERE user_id = $1
-      AND token = $2
-    `,
-    [req.user.id, token]
-  );
+    const token = authHeader.split(" ")[1];
 
-  res.json({ message: "Logout berhasil" });
+    const result = await pool.query(
+      `
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          expired_at = NOW()
+      WHERE user_id = $1
+        AND token = $2
+        AND is_active = true
+      `,
+      [req.user.id, token]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({
+        message: "Session sudah logout atau tidak ditemukan",
+      });
+    }
+
+    return res.json({ message: "Logout berhasil" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ message: "Logout gagal" });
+  }
 });
+
+setInterval(async () => {
+  try {
+    await pool.query(`
+      DELETE FROM user_sessions
+      WHERE expired_at < NOW() - INTERVAL '7 days'
+    `);
+    console.log("🧹 Session lama dibersihkan");
+  } catch (err) {
+    console.error("Cleanup session error:", err);
+  }
+}, 1000 * 60 * 60); 
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

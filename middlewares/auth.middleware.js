@@ -3,13 +3,21 @@ const pool = require("../config/db");
 
 module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  const deviceId = req.headers["x-device-id"]; // 🔥 OPSI 4
 
   if (!authHeader) {
     return res.status(401).json({ message: "Token tidak ditemukan" });
   }
 
+  if (!deviceId) {
+    return res.status(401).json({
+      message: "Device ID tidak ditemukan",
+    });
+  }
+
   try {
     const token = authHeader.split(" ")[1];
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const sessionCheck = await pool.query(
@@ -18,17 +26,20 @@ module.exports = async (req, res, next) => {
       FROM user_sessions
       WHERE user_id = $1
         AND token = $2
+        AND device_id = $3
         AND is_active = true
+        AND expired_at > NOW()
       `,
-      [decoded.id, token]
+      [decoded.id, token, deviceId]
     );
 
     if (sessionCheck.rowCount === 0) {
       return res.status(401).json({
-        message: "Session tidak valid atau sudah logout",
+        message: "Session tidak aktif / sudah logout / device berbeda",
       });
     }
 
+    // 3CEK USER MASIH ADA
     const userQuery = await pool.query(
       `
       SELECT
@@ -48,6 +59,7 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ message: "User tidak ditemukan" });
     }
 
+    // 4️⃣ PASS KE REQUEST
     req.user = {
       id: userQuery.rows[0].id,
       site_id: userQuery.rows[0].site_id,
@@ -57,7 +69,7 @@ module.exports = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("AUTH ERROR:", err);
+    console.error("AUTH ERROR:", err.message);
     return res.status(401).json({ message: "Unauthorized" });
   }
 };
