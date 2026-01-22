@@ -3,7 +3,7 @@ const pool = require("../config/db");
 
 module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  const deviceId = req.headers["x-device-id"]; // 🔥 OPSI 4
+  const deviceId = req.headers["x-device-id"];
 
   if (!authHeader) {
     return res.status(401).json({ message: "Token tidak ditemukan" });
@@ -16,10 +16,16 @@ module.exports = async (req, res, next) => {
   }
 
   try {
+    // 🔥 AMBIL TOKEN
     const token = authHeader.split(" ")[1];
 
+    // 🔥 VERIFY JWT
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // 🔥 SIMPAN TOKEN KE REQUEST (INI KUNCI UTAMA)
+    req.token = token;
+
+    // 🔥 CEK SESSION AKTIF (BERDASARKAN TOKEN + DEVICE)
     const sessionCheck = await pool.query(
       `
       SELECT id
@@ -39,7 +45,7 @@ module.exports = async (req, res, next) => {
       });
     }
 
-    // 3CEK USER MASIH ADA
+    // 🔥 CEK USER MASIH ADA
     const userQuery = await pool.query(
       `
       SELECT
@@ -59,7 +65,7 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ message: "User tidak ditemukan" });
     }
 
-    // 4️⃣ PASS KE REQUEST
+    // 🔥 PASS KE REQUEST
     req.user = {
       id: userQuery.rows[0].id,
       site_id: userQuery.rows[0].site_id,

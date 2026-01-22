@@ -210,6 +210,32 @@ app.post("/login", async (req, res) => {
   }
 });
 
+app.post("/logout", authMiddleware, async (req, res) => {
+  try {
+    const token = req.token; // ambil dari middleware
+
+    const result = await pool.query(`
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          expired_at = NOW()
+      WHERE token = $1
+        AND is_active = true
+    `, [token]);
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({
+        message: "Session tidak ditemukan / sudah logout"
+      });
+    }
+
+    return res.json({ message: "Logout berhasil" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ message: "Logout gagal" });
+  }
+});
+
 
 app.get("/sites", async (req, res) => {
   try {
@@ -252,26 +278,7 @@ app.get("/departments", async (req, res) => {
   }
 });
 
-app.post("/logout", authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `
-      UPDATE user_sessions
-      SET is_active = false,
-          logout_at = NOW(),
-          expired_at = NOW()
-      WHERE user_id = $1
-        AND is_active = true
-      `,
-      [req.user.id]
-    );
 
-    return res.json({ message: "Logout berhasil" });
-  } catch (err) {
-    console.error("Logout error:", err);
-    return res.status(500).json({ message: "Logout gagal" });
-  }
-});
 
 
 setInterval(async () => {
