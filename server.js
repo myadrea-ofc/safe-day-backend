@@ -254,13 +254,6 @@ app.get("/departments", async (req, res) => {
 
 app.post("/logout", authMiddleware, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(400).json({ message: "Authorization header kosong" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
     const result = await pool.query(
       `
       UPDATE user_sessions
@@ -268,17 +261,10 @@ app.post("/logout", authMiddleware, async (req, res) => {
           logout_at = NOW(),
           expired_at = NOW()
       WHERE user_id = $1
-        AND token = $2
         AND is_active = true
       `,
-      [req.user.id, token]
+      [req.user.id]
     );
-
-    if (result.rowCount === 0) {
-      return res.status(400).json({
-        message: "Session sudah logout atau tidak ditemukan",
-      });
-    }
 
     return res.json({ message: "Logout berhasil" });
   } catch (err) {
@@ -286,6 +272,7 @@ app.post("/logout", authMiddleware, async (req, res) => {
     return res.status(500).json({ message: "Logout gagal" });
   }
 });
+
 
 setInterval(async () => {
   try {
