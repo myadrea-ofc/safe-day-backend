@@ -139,21 +139,22 @@ router.get(
   authMiddleware,
   allowRoles("admin", "superadmin"),
   async (req, res) => {
-    console.log("🔥 HIT /users", req.query, req.user);
     try {
-      const { site_id, department_id } = req.query;
+      const { site_id, department_id, search = "", limit = 50, offset = 0 } = req.query;
 
       if (!department_id) {
         return res.status(400).json({ message: "Department wajib dipilih" });
       }
 
       let sql = `
-        SELECT id, name FROM users
-        WHERE department_id = $1
+        SELECT id, name 
+        FROM users 
+        WHERE department_id = $1 
           AND deleted_at IS NULL
       `;
       const params = [department_id];
 
+      // 🔒 Site filtering
       if (req.user.role === "superadmin") {
         if (site_id) {
           sql += " AND site_id = $2";
@@ -163,6 +164,16 @@ router.get(
         sql += " AND site_id = $2";
         params.push(req.user.site_id);
       }
+
+      // 🔍 Search by name
+      if (search) {
+        params.push(`%${search.toLowerCase()}%`);
+        sql += ` AND LOWER(name) LIKE $${params.length}`;
+      }
+
+      // Pagination
+      sql += ` ORDER BY name ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(parseInt(limit, 10), parseInt(offset, 10));
 
       const result = await pool.query(sql, params);
       res.json(result.rows);
