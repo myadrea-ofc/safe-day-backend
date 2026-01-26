@@ -181,18 +181,19 @@ app.post("/login", async (req, res) => {
         department_id: user.department_id,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "3d" }
     );
 
     // Simpan session baru
     await pool.query(
-      `
-      INSERT INTO user_sessions
-      (user_id, token, device_id, is_active, expired_at)
-      VALUES ($1, $2, $3, true, NOW() + INTERVAL '1 day')
-      `,
-      [user.id, token, device_id]
-    );
+  `
+  INSERT INTO user_sessions
+  (user_id, token, device_id, is_active, expired_at, last_seen)
+  VALUES ($1, $2, $3, true, NOW() + INTERVAL '3 days', NOW())
+  `,
+  [user.id, token, device_id]
+);
+
 
     return res.json({
       token,
@@ -280,21 +281,29 @@ app.get("/departments", async (req, res) => {
 
 
 
-
 setInterval(async () => {
   try {
     await pool.query(`
-      DELETE FROM user_sessions
-      WHERE expired_at < NOW() - INTERVAL '7 days'
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          logout_reason = 'inactive'
+      WHERE is_active = true
+        AND last_seen < NOW() - INTERVAL '3 days'
     `);
-    console.log("🧹 Session lama dibersihkan");
+
+    console.log("🛑 Session inactive dimatikan");
   } catch (err) {
-    console.error("Cleanup session error:", err);
+    console.error("Auto logout error:", err);
   }
-}, 1000 * 60 * 60); 
+}, 1000 * 60 * 5); 
+
+
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
+
 

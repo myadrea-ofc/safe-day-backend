@@ -16,16 +16,16 @@ module.exports = async (req, res, next) => {
   }
 
   try {
-    // 🔥 AMBIL TOKEN
+    // AMBIL TOKEN
     const token = authHeader.split(" ")[1];
 
-    // 🔥 VERIFY JWT
+    // VERIFY JWT
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 🔥 SIMPAN TOKEN KE REQUEST (INI KUNCI UTAMA)
+    // SIMPAN TOKEN KE REQUEST
     req.token = token;
 
-    // 🔥 CEK SESSION AKTIF (BERDASARKAN TOKEN + DEVICE)
+    // CEK SESSION AKTIF + HEARTBEAT
     const sessionCheck = await pool.query(
       `
       SELECT id
@@ -35,6 +35,10 @@ module.exports = async (req, res, next) => {
         AND device_id = $3
         AND is_active = true
         AND expired_at > NOW()
+        AND (
+          last_seen IS NULL
+          OR last_seen > NOW() - INTERVAL '3 days'
+        )
       `,
       [decoded.id, token, deviceId]
     );
@@ -45,7 +49,19 @@ module.exports = async (req, res, next) => {
       });
     }
 
-    // 🔥 CEK USER MASIH ADA
+    //  UPDATE HEARTBEAT 
+    await pool.query(
+      `
+      UPDATE user_sessions
+      SET last_seen = NOW()
+      WHERE token = $1
+        AND device_id = $2
+        AND is_active = true
+      `,
+      [token, deviceId]
+    );
+
+    // CEK USER MASIH ADA
     const userQuery = await pool.query(
       `
       SELECT
@@ -65,7 +81,7 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ message: "User tidak ditemukan" });
     }
 
-    // 🔥 PASS KE REQUEST
+    // PASS KE REQUEST
     req.user = {
       id: userQuery.rows[0].id,
       site_id: userQuery.rows[0].site_id,
@@ -76,6 +92,22 @@ module.exports = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("AUTH ERROR:", err.message);
+
+    // TOKEN EXPIRED → MATIKAN SESSION
+    if (err.name === "TokenExpiredError") {
+      const token = authHeader.split(" ")[1];
+      await pool.query(
+        `
+        UPDATE user_sessions
+        SET is_active = false,
+            logout_at = NOW(),
+            logout_reason = 'token_expired'
+        WHERE token = $1
+        `,
+        [token]
+      );
+    }
+
     return res.status(401).json({ message: "Unauthorized" });
   }
 };
