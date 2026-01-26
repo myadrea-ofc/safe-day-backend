@@ -162,11 +162,12 @@ app.post("/login", async (req, res) => {
     await pool.query(
       `
       UPDATE user_sessions
-      SET is_active = false,
-          logout_at = NOW(),
-          expired_at = NOW()
-      WHERE user_id = $1
-        AND is_active = true
+SET is_active = false,
+    expired_at = NOW(),
+    logout_reason = 'relogin'
+WHERE user_id = $1
+  AND is_active = true
+
       `,
       [user.id]
     );
@@ -213,15 +214,17 @@ app.post("/login", async (req, res) => {
 
 app.post("/logout", authMiddleware, async (req, res) => {
   try {
-    const token = req.token; // ambil dari middleware
+    const token = req.token; 
 
     const result = await pool.query(`
       UPDATE user_sessions
-      SET is_active = false,
-          logout_at = NOW(),
-          expired_at = NOW()
-      WHERE token = $1
-        AND is_active = true
+SET is_active = false,
+    expired_at = NOW(),
+    logout_at = NOW(),
+    logout_reason = 'manual'
+WHERE token = $1
+  AND is_active = true
+
     `, [token]);
 
     if (result.rowCount === 0) {
@@ -285,11 +288,13 @@ setInterval(async () => {
   try {
     await pool.query(`
       UPDATE user_sessions
-      SET is_active = false,
-          logout_at = NOW(),
-          logout_reason = 'inactive'
-      WHERE is_active = true
-        AND last_seen < NOW() - INTERVAL '3 days'
+SET is_active = false,
+    logout_at = NOW(),
+    logout_reason = 'inactive'
+WHERE is_active = true
+  AND (
+    last_seen < NOW() - INTERVAL '3 days'
+    OR expired_at < NOW()
     `);
 
     console.log("🛑 Session inactive dimatikan");
