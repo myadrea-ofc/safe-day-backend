@@ -51,15 +51,17 @@ module.exports = async (req, res, next) => {
 
     //  UPDATE HEARTBEAT 
     await pool.query(
-      `
-      UPDATE user_sessions
-      SET last_seen = NOW()
-      WHERE token = $1
-        AND device_id = $2
-        AND is_active = true
-      `,
-      [token, deviceId]
-    );
+  `
+  UPDATE user_sessions
+  SET last_seen = NOW()
+  WHERE user_id = $1
+    AND token = $2
+    AND device_id = $3
+    AND is_active = true
+  `,
+  [decoded.id, token, deviceId]
+);
+
 
     // CEK USER MASIH ADA
     const userQuery = await pool.query(
