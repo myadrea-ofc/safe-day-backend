@@ -159,18 +159,16 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Password salah" });
     }
 
-    await pool.query(
-      `
-      UPDATE user_sessions
-SET is_active = false,
-    expired_at = NOW(),
-    logout_reason = 'relogin'
-WHERE user_id = $1
-  AND is_active = true
+    await pool.query(`
+  UPDATE user_sessions
+  SET is_active = false,
+      expired_at = NOW(),
+      logout_at = NOW(),       
+      logout_reason = 'relogin'
+  WHERE user_id = $1
+    AND is_active = true
+`, [user.id]);
 
-      `,
-      [user.id]
-    );
 
     // Generate token baru
     const token = jwt.sign(
@@ -282,33 +280,39 @@ app.get("/departments", async (req, res) => {
   }
 });
 
-
-
 setInterval(async () => {
   try {
+    // TOKEN EXPIRED
     await pool.query(`
       UPDATE user_sessions
-SET is_active = false,
-    logout_at = NOW(),
-    logout_reason = 'inactive'
-WHERE is_active = true
-  AND (
-    last_seen < NOW() - INTERVAL '3 days'
-    OR expired_at < NOW()
+      SET is_active = false,
+          logout_at = NOW(),
+          logout_reason = 'token_expired'
+      WHERE is_active = true
+        AND expired_at < NOW()
     `);
 
-    console.log("🛑 Session inactive dimatikan");
+    // INACTIVE USER
+    await pool.query(`
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          logout_reason = 'inactive'
+      WHERE is_active = true
+        AND last_seen < NOW() - INTERVAL '3 days'
+    `);
+
+    console.log("🛑 Auto logout berjalan normal");
   } catch (err) {
     console.error("Auto logout error:", err);
   }
-}, 1000 * 60 * 5); 
-
+}, 1000 * 60 * 5);
 
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 
