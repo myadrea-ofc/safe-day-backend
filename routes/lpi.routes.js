@@ -88,8 +88,8 @@ router.post(
           department_saksi,
           klasifikasi_insiden,
           kronologi,
-          file_path,
-          foto_paths,
+          file_path,  
+          JSON.stringify(foto_paths),
           status_lokasi,
           site_id,
         ]
