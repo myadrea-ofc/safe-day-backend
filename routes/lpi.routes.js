@@ -23,7 +23,8 @@ router.post(
   authMiddleware,
   upload.fields([
     { name: "file", maxCount: 1 },
-    { name: "foto", maxCount: 1 },
+{ name: "foto", maxCount: 10 }, 
+
   ]),
   async (req, res) => {
     try {
@@ -49,7 +50,10 @@ router.post(
       const site_id = req.user.site_id;
 
       const file_path = req.files?.file?.[0]?.filename || null;
-      const foto_path = req.files?.foto?.[0]?.filename || null;
+      const foto_paths = req.files?.foto
+  ? req.files.foto.map(f => f.filename)
+  : [];
+
 
       await pool.query(
         `
@@ -58,7 +62,7 @@ router.post(
           nama_korban, jabatan_korban, nama_spv, department_spv,
           jenis_aset_perusahaan, nama_saksi, jabatan_saksi,
           department_saksi, klasifikasi_insiden, kronologi,
-          file_path, foto_path, status_lokasi, site_id
+          file_path, foto_paths, status_lokasi, site_id
         )
         VALUES (
           $1,$2,$3,$4,$5,
@@ -85,7 +89,7 @@ router.post(
           klasifikasi_insiden,
           kronologi,
           file_path,
-          foto_path,
+          foto_paths,
           status_lokasi,
           site_id,
         ]
@@ -122,7 +126,7 @@ router.get("/", authMiddleware, async (req, res) => {
         klasifikasi_insiden,
         kronologi,
         file_path,
-        foto_path,
+        foto_paths,
         status_lokasi,
         created_at,
         site_id
