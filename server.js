@@ -122,7 +122,7 @@ app.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Data login tidak lengkap" });
     }
 
-    // Cari user
+    // 1️⃣ Cari user
     const result = await pool.query(
       `
       SELECT u.id, u.name, u.password,
@@ -130,20 +130,13 @@ app.post("/login", async (req, res) => {
              u.site_id, u.department_id
       FROM users u
       JOIN roles r ON r.id = u.role_id
-       WHERE trim(upper(u.name)) = trim(upper($1))
+      WHERE trim(upper(u.name)) = trim(upper($1))
         AND u.site_id = $2
         AND u.department_id = $3
         AND u.deleted_at IS NULL
       `,
       [name, site_id, department_id]
     );
-
-    console.log("LOGIN CHECK:", {
-  name,
-  site_id,
-  department_id,
-});
-
 
     if (result.rowCount === 0) {
       return res.status(401).json({
@@ -153,24 +146,46 @@ app.post("/login", async (req, res) => {
 
     const user = result.rows[0];
 
-    // Cek password
+    // 2️⃣ Cek password
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah" });
     }
 
-    await pool.query(`
-  UPDATE user_sessions
-  SET is_active = false,
-      expired_at = NOW(),
-      logout_at = NOW(),       
-      logout_reason = 'relogin'
-  WHERE user_id = $1
-    AND is_active = true
-`, [user.id]);
+    // 🔥 3️⃣ CEK SESSION AKTIF DI DEVICE LAIN (INI INTINYA)
+    const activeSession = await pool.query(
+      `
+      SELECT id
+      FROM user_sessions
+      WHERE user_id = $1
+        AND is_active = true
+        AND expired_at > NOW()
+        AND device_id <> $2
+      `,
+      [user.id, device_id]
+    );
 
+    if (activeSession.rowCount > 0) {
+      return res.status(409).json({
+        message: "Akun ini sedang login di device lain",
+      });
+    }
 
-    // Generate token baru
+    // 4️⃣ Matikan session lama (relogin device yang sama)
+    await pool.query(
+      `
+      UPDATE user_sessions
+      SET is_active = false,
+          expired_at = NOW(),
+          logout_at = NOW(),
+          logout_reason = 'relogin'
+      WHERE user_id = $1
+        AND is_active = true
+      `,
+      [user.id]
+    );
+
+    // 5️⃣ Generate token baru
     const token = jwt.sign(
       {
         id: user.id,
@@ -183,16 +198,15 @@ app.post("/login", async (req, res) => {
       { expiresIn: "3d" }
     );
 
-    // Simpan session baru
+    // 6️⃣ Simpan session baru
     await pool.query(
-  `
-  INSERT INTO user_sessions
-  (user_id, token, device_id, is_active, expired_at, last_seen)
-  VALUES ($1, $2, $3, true, NOW() + INTERVAL '3 days', NOW())
-  `,
-  [user.id, token, device_id]
-);
-
+      `
+      INSERT INTO user_sessions
+      (user_id, token, device_id, is_active, expired_at, last_seen)
+      VALUES ($1, $2, $3, true, NOW() + INTERVAL '3 days', NOW())
+      `,
+      [user.id, token, device_id]
+    );
 
     return res.json({
       token,
@@ -209,6 +223,7 @@ app.post("/login", async (req, res) => {
     return res.status(500).json({ message: "Login gagal" });
   }
 });
+
 
 app.post("/logout", authMiddleware, async (req, res) => {
   try {
@@ -280,6 +295,28 @@ app.get("/departments", async (req, res) => {
   }
 });
 
+app.get("/validate-session", authMiddleware, async (req, res) => {
+  try {
+    const token = req.token;
+    const deviceId = req.headers["x-device-id"];
+
+    const session = await pool.query(
+      `SELECT id FROM user_sessions
+       WHERE token=$1 AND device_id=$2 AND is_active=true`,
+      [token, deviceId]
+    );
+
+    if (session.rowCount === 0) {
+      return res.json({ valid: false });
+    }
+
+    return res.json({ valid: true });
+  } catch (err) {
+    return res.status(500).json({ valid: false });
+  }
+});
+
+
 setInterval(async () => {
   try {
     // TOKEN EXPIRED
@@ -310,9 +347,6 @@ setInterval(async () => {
 
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-
