@@ -18,24 +18,33 @@ const storage = multer.diskStorage({
 
 console.log("🔥 P2H WHEELLOADER ROUTE LOADED");
 
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, 
+    files: 5,                 
+  },
+});
 
-const upload = multer({ storage });
-
-// ===================== POST =====================
 router.post(
   "/",
   authMiddleware,
-  upload.array("files", 5),
-  async (req, res) => {
-    try {
-      if (!req.files || req.files.length === 0) {
-  return res.status(400).json({
-    success: false,
-    message: "Minimal 1 file wajib diupload",
-  });
-}
+  (req, res) => {
+    upload.array("files", 5)(req, res, async (err) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(413).json({
+          success: false,
+          message: "Ukuran file maksimal 5MB, maksimal 5 file",
+        });
+      }
 
-
+      if (err) {
+        return res.status(500).json({
+          success: false,
+          message: err.message,
+        });
+      }
+try{
       const {
         nama,
         nrp,
@@ -212,13 +221,21 @@ VALUES (
         tanggal,
       ]);
 
-      res.status(201).json({ success: true });
-    } catch (e) {
-      console.error("P2H WHEELLOADER POST ERROR:", e);
-      res.status(500).json({ success: false, error: e.message });
-    }
+    return res.status(201).json({
+          success: true,
+          uploaded_files: files.length,
+        });
+
+      } catch (e) {
+        console.error("P2H BUS POST ERROR:", e);
+        return res.status(500).json({
+          success: false,
+          error: e.message,
+        });
+      }
+    });
   }
-);
+)
 
 // ===================== GET =====================
 router.get("/", authMiddleware, async (req, res) => {
