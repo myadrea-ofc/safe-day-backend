@@ -22,15 +22,15 @@ const upload = multer({ storage });
 router.post(
   "/",
   authMiddleware,
-  upload.single("files"),
+ upload.array("files", 5),
   async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: "File wajib diupload",
-        });
-      }
+       try {
+      if (!req.files || req.files.length === 0) {
+  return res.status(400).json({
+    success: false,
+    message: "Minimal 1 file wajib diupload",
+  });
+}
 
       const {
         nama,
@@ -101,7 +101,7 @@ router.post(
       } = req.body;
 
       const site_id = parseInt(req.user.site_id);
-      const files = req.file.filename;
+      const files = req.files.map(f => f.filename);
 
       const query = `
         INSERT INTO p2h_bus (
@@ -225,7 +225,7 @@ router.post(
         status_keadaan6,
 
         status_siap,
-        files,
+        JSON.stringify(files),
         site_id,
         tanggal,
       ]);
