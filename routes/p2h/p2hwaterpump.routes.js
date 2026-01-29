@@ -16,21 +16,33 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + "-" + file.originalname),
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, 
+    files: 5,                 
+  },
+});
 
-// ===================== POST =====================
 router.post(
   "/",
   authMiddleware,
-  upload.single("files"),
-  async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
+  (req, res) => {
+    upload.array("files", 5)(req, res, async (err) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(413).json({
           success: false,
-          message: "File wajib diupload",
+          message: "Ukuran file maksimal 5MB, maksimal 5 file",
         });
       }
+
+      if (err) {
+        return res.status(500).json({
+          success: false,
+          message: err.message,
+        });
+      }
+try{
 
       const {
         nama,
@@ -73,7 +85,8 @@ router.post(
       } = req.body;
 
       const site_id = parseInt(req.user.site_id);
-      const files = req.file.filename;
+      
+      const files = req.files.map(f => f.filename);
 
       const query = `
         INSERT INTO p2h_water_pump (
@@ -149,17 +162,25 @@ router.post(
         alat_keselamatan_air4,
 
         unit_aman,
-        files,
+        JSON.stringify(files),
         site_id,
       ]);
 
-      res.status(201).json({ success: true });
-    } catch (e) {
-      console.error("P2H WATER PUMP POST ERROR:", e);
-      res.status(500).json({ success: false, error: e.message });
-    }
+    return res.status(201).json({
+          success: true,
+          uploaded_files: files.length,
+        });
+
+      } catch (e) {
+        console.error("P2H WATER PUMP POST ERROR:", e);
+        return res.status(500).json({
+          success: false,
+          error: e.message,
+        });
+      }
+    });
   }
-);
+)
 
 // ===================== GET =====================
 router.get("/", authMiddleware, async (req, res) => {

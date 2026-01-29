@@ -16,8 +16,6 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + "-" + file.originalname),
 });
 
-console.log("🔥 P2H WHEELLOADER ROUTE LOADED");
-
 const upload = multer({
   storage,
   limits: {
@@ -227,7 +225,7 @@ VALUES (
         });
 
       } catch (e) {
-        console.error("P2H BUS POST ERROR:", e);
+        console.error("P2H WHEELL LOADER POST ERROR:", e);
         return res.status(500).json({
           success: false,
           error: e.message,
