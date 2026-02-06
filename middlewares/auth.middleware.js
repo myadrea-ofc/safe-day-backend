@@ -44,10 +44,23 @@ module.exports = async (req, res, next) => {
     );
 
     if (sessionCheck.rowCount === 0) {
-      return res.status(401).json({
-        message: "Session tidak aktif / sudah logout / device berbeda",
-      });
-    }
+  const reasonRes = await pool.query(
+    `
+    SELECT logout_reason
+    FROM user_sessions
+    WHERE token = $1
+    ORDER BY logout_at DESC
+    LIMIT 1
+    `,
+    [token]
+  );
+
+  return res.status(401).json({
+    message: "Session tidak aktif",
+    reason: reasonRes.rows[0]?.logout_reason ?? "invalid_session",
+  });
+}
+
 
     //  UPDATE HEARTBEAT 
     await pool.query(

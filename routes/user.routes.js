@@ -114,13 +114,26 @@ router.put(
         params.push(req.user.site_id);
       }
 
-      const result = await pool.query(sql, params);
+const result = await pool.query(sql, params);
 
-      if (result.rowCount === 0) {
-        return res.status(403).json({ message: "Tidak punya akses" });
-      }
+if (result.rowCount === 0) {
+  return res.status(403).json({ message: "Tidak punya akses" });
+}
 
-      res.json({ success: true });
+await pool.query(
+  `
+  UPDATE user_sessions
+  SET is_active = false,
+      logout_at = NOW(),
+      logout_reason = 'role_changed'
+  WHERE user_id = $1
+    AND is_active = true
+  `,
+  [req.params.id]
+);
+
+res.json({ success: true });
+
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Gagal update role" });
