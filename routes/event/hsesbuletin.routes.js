@@ -7,7 +7,6 @@ const pool = require("../../config/db");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const allowRoles = require("../../middlewares/role.middleware");
 
-/* ===================== MULTER ===================== */
 if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
 
 const storage = multer.diskStorage({
@@ -17,17 +16,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-/* =========================================================
-   CREATE BULETIN
-   ========================================================= */
 router.post(
   "/",
   authMiddleware,
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
   async (req, res) => {
-    try {
-      const { judul, subJudul, deskripsi, site_ids } = req.body;
+    try 
+    {const { judul, subJudul, deskripsi, site_ids, is_for_all_sites } = req.body;
+    const isForAllSites = is_for_all_sites === '1' || is_for_all_sites === true;
 
       // ======== Handle sites =========
       let sites = site_ids;
@@ -61,7 +58,6 @@ router.post(
 
       const buletinId = buletin.rows[0].id;
 
-      // ======== Insert ke hses_buletin_sites =========
       for (const sId of sites) {
         await pool.query(
           `INSERT INTO hses_buletin_sites (buletin_id, site_id) VALUES ($1,$2)`,
@@ -69,7 +65,10 @@ router.post(
         );
       }
 
-      res.status(201).json(buletin.rows[0]);
+        res.status(201).json({
+        ...buletin.rows[0],
+        is_for_all_sites: isForAllSites,
+      });
     } catch (err) {
       console.error("CREATE BULETIN ERROR:", err);
       res.status(500).json({ message: "Insert failed" });
@@ -77,9 +76,6 @@ router.post(
   }
 );
 
-/* =========================================================
-   GET BULETIN (CARD)
-   ========================================================= */
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id, id: user_id } = req.user;
@@ -134,9 +130,6 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-/* =========================================================
-   UPDATE BULETIN
-   ========================================================= */
 router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.single("gambar"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -176,7 +169,6 @@ router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.sin
     if (result.rowCount === 0)
       return res.status(404).json({ message: "Data tidak ditemukan atau tidak punya akses" });
 
-    // ======== Update Sites =========
     if (site_ids) {
       let sites = Array.isArray(site_ids) ? site_ids.map(Number) : [Number(site_ids)];
       if (req.user.role === "admin") sites = [req.user.site_id];
@@ -197,9 +189,6 @@ router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.sin
   }
 });
 
-/* =========================================================
-   DELETE BULETIN (SOFT)
-   ========================================================= */
 router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -235,9 +224,6 @@ router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (
   }
 });
 
-/* =========================================================
-   POST REVIEW
-   ========================================================= */
 router.post("/:id/review", authMiddleware, allowRoles("member", "admin"), async (req, res) => {
   try {
     const buletinId = req.params.id;
@@ -284,9 +270,6 @@ router.post("/:id/review", authMiddleware, allowRoles("member", "admin"), async 
   }
 });
 
-/* =========================================================
-   TABLE REVIEW
-   ========================================================= */
 router.get("/table", authMiddleware, allowRoles("admin", "superadmin"), async (req, res) => {
   try {
     const { role, site_id } = req.user;
@@ -325,9 +308,6 @@ router.get("/table", authMiddleware, allowRoles("admin", "superadmin"), async (r
   }
 });
 
-/* =========================================================
-   GET REVIEW PER BULETIN
-   ========================================================= */
 router.get("/:id/review", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -355,9 +335,6 @@ router.get("/:id/review", authMiddleware, async (req, res) => {
   }
 });
 
-/* =========================================================
-   GET RATING SUMMARY
-   ========================================================= */
 router.get("/:id/rating", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
