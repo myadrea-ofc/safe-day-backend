@@ -104,6 +104,7 @@ router.get("/", authMiddleware, async (req, res) => {
         lr.rating,
         lr.comment,
         ARRAY_AGG(s.site_name) AS sites
+        ARRAY_AGG(bs.site_id) AS site_ids
       FROM hses_buletin b
       LEFT JOIN hses_buletin_sites bs ON bs.buletin_id = b.id
       LEFT JOIN sites s ON s.id = bs.site_id
