@@ -1,3 +1,8 @@
+const {
+  getTargetUsers,
+  sendDailyPlanNotification,
+} = require("../../services/notification.services");
+
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
@@ -31,24 +36,23 @@ router.post(
 
      let sites = site_ids;
 
-if (!sites) {
-  sites = [];
-} else if (!Array.isArray(sites)) {
-  sites = [sites];
-}
+      if (!sites) {
+        sites = [];
+      } else if (!Array.isArray(sites)) {
+        sites = [sites];
+      }
 
-sites = sites.map(Number);
+      sites = sites.map(Number);
 
-if (req.user.role === "superadmin" && sites.length === 0) {
-  return res.status(400).json({
-    message: "Minimal 1 site harus dipilih",
-  });
-}
+      if (req.user.role === "superadmin" && sites.length === 0) {
+        return res.status(400).json({
+          message: "Minimal 1 site harus dipilih",
+        });
+      }
 
-if (req.user.role === "admin") {
-  sites = [req.user.site_id];
-}
-
+      if (req.user.role === "admin") {
+        sites = [req.user.site_id];
+      }
 
       // CREATE DAILY PLAN
       const plan = await pool.query(
@@ -69,16 +73,31 @@ if (req.user.role === "admin") {
 
       const planId = plan.rows[0].id;
 
-      // INSERT SITE RELATION
-      for (const siteId of sites) {
-        await pool.query(
-          `
-          INSERT INTO hses_daily_plan_sites (daily_plan_id, site_id)
-          VALUES ($1,$2)
-          `,
-          [planId, siteId]
-        );
-      }
+        // INSERT SITE RELATION
+        for (const siteId of sites) {
+          await pool.query(
+            `
+            INSERT INTO hses_daily_plan_sites (daily_plan_id, site_id)
+            VALUES ($1,$2)
+            `,
+            [planId, siteId]
+          );
+        }
+        /* ================== PUSH NOTIFICATION ================== */
+        const userIds = await getTargetUsers({
+          creatorRole: req.user.role,
+          siteIds: sites,
+          creatorId: req.user.id,
+        });
+
+        await sendDailyPlanNotification({
+          creatorRole: req.user.role,
+          siteIds: sites,
+          creatorId: req.user.id,
+          title: judul,
+          planId,
+        });
+
 
       res.status(201).json(plan.rows[0]);
     } catch (err) {
@@ -236,8 +255,6 @@ router.put(
   }
 );
 
-
-
 // DELETE (SOFT)
 router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (req, res) => {
   try {
@@ -269,8 +286,6 @@ router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (
     res.status(500).json({ message: "Delete failed" });
   }
 });
-
-
 
 /* REVIEW (RATING & COMMENT) */
 

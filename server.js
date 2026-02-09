@@ -76,6 +76,8 @@ const buletinRoutes = require("./routes/event/hsesbuletin.routes");
 
 const authRoutes = require("./routes/auth.routes");
 
+const notificationRoutes = require("./routes/notification.routes")
+
 app.use("/auth", authRoutes);
 
 app.use("/api/events", eventRoutes);
@@ -112,6 +114,8 @@ app.use("/p2h_fuel_truck", p2hfueltruck);
 
 app.use("/hses_daily_plan", dailyPlanRoutes);
 app.use("/hses_buletin", buletinRoutes);
+
+app.use("/notifications", notificationRoutes)
 
 
 app.post("/login", async (req, res) => {

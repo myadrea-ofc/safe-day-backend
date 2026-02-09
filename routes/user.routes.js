@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -198,6 +199,23 @@ router.get(
 );
 
 
+router.post("/fcm-token", authMiddleware, async (req, res) => {
+  const { fcm_token } = req.body;
 
+  if (!fcm_token) {
+    return res.status(400).json({ message: "FCM token required" });
+  }
+
+  await pool.query(
+    `
+    INSERT INTO user_fcm_tokens (user_id, fcm_token)
+    VALUES ($1,$2)
+    ON CONFLICT DO NOTHING
+    `,
+    [req.user.id, fcm_token]
+  );
+
+  res.json({ success: true });
+});
 
 module.exports = router;
