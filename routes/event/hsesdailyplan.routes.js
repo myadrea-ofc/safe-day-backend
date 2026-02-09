@@ -39,9 +39,16 @@ if (!sites) {
 
 sites = sites.map(Number);
 
-      if (req.user.role === "admin") {
-        sites = [req.user.site_id];
-      }
+if (req.user.role === "superadmin" && sites.length === 0) {
+  return res.status(400).json({
+    message: "Minimal 1 site harus dipilih",
+  });
+}
+
+if (req.user.role === "admin") {
+  sites = [req.user.site_id];
+}
+
 
       // CREATE DAILY PLAN
       const plan = await pool.query(
@@ -107,7 +114,8 @@ router.get("/", authMiddleware, async (req, res) => {
         u.site_id AS created_by_site_id,
         r.role_name AS created_by_role,
         lr.rating,
-        lr.comment
+        lr.comment,
+        ARRAY_AGG(ps.site_id) FILTER (WHERE ps.site_id IS NOT NULL) AS site_ids
       FROM hses_daily_plan p
       LEFT JOIN hses_daily_plan_sites ps
         ON ps.daily_plan_id = p.id
@@ -138,51 +146,96 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-// UPDATE DAILY PLAN
-router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.single("gambar"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { judul, subJudul, deskripsi } = req.body;
+router.put(
+  "/:id",
+  authMiddleware,
+  allowRoles("admin", "superadmin"),
+  upload.single("gambar"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { judul, subJudul, deskripsi, site_ids } = req.body;
 
-    // Base query
-    let query = `
-      UPDATE hses_daily_plan
-      SET
-        judul = $1,
-        sub_judul = $2,
-        deskripsi = $3
-        ${req.file ? ", gambar = $4" : ""}
-      WHERE id = $${req.file ? 5 : 4}
-        AND deleted_at IS NULL
-    `;
+      /* ================== NORMALISASI SITE IDS ================== */
+      let sites = site_ids;
 
-    // Base params
-    const params = req.file
-      ? [judul, subJudul, deskripsi, req.file.filename, id]
-      : [judul, subJudul, deskripsi, id];
+      if (!sites) {
+        sites = [];
+      } else if (!Array.isArray(sites)) {
+        sites = [sites];
+      }
 
-    // Logic akses admin
-    if (req.user.role === "admin") {
-      // Admin hanya bisa update plan mereka sendiri dan yang dibuat admin
-      query += `
-        AND created_by = $${params.length + 1}
+      sites = sites.map(Number);
+
+      // admin hanya boleh 1 site
+      if (req.user.role === "admin") {
+        sites = [req.user.site_id];
+      }
+
+      if (sites.length === 0) {
+        return res.status(400).json({
+          message: "Minimal 1 site harus dipilih",
+        });
+      }
+
+      /* ================== UPDATE DAILY PLAN ================== */
+      let query = `
+        UPDATE hses_daily_plan
+        SET
+          judul = $1,
+          sub_judul = $2,
+          deskripsi = $3
+          ${req.file ? ", gambar = $4" : ""}
+        WHERE id = $${req.file ? 5 : 4}
+          AND deleted_at IS NULL
       `;
-      params.push(req.user.id);
+
+      const params = req.file
+        ? [judul, subJudul, deskripsi, req.file.filename, id]
+        : [judul, subJudul, deskripsi, id];
+
+      // admin hanya boleh update miliknya
+      if (req.user.role === "admin") {
+        query += ` AND created_by = $${params.length + 1}`;
+        params.push(req.user.id);
+      }
+
+      query += " RETURNING *";
+
+      const result = await pool.query(query, params);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          message: "Data tidak ditemukan atau tidak punya akses",
+        });
+      }
+
+      /* ================== UPDATE RELASI SITE ================== */
+      // hapus relasi lama
+      await pool.query(
+        `DELETE FROM hses_daily_plan_sites WHERE daily_plan_id = $1`,
+        [id]
+      );
+
+      // insert relasi baru
+      for (const siteId of sites) {
+        await pool.query(
+          `
+          INSERT INTO hses_daily_plan_sites (daily_plan_id, site_id)
+          VALUES ($1,$2)
+          `,
+          [id, siteId]
+        );
+      }
+
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error("UPDATE DAILY PLAN ERROR:", err);
+      res.status(500).json({ message: "Update failed" });
     }
-
-    query += " RETURNING *";
-    const result = await pool.query(query, params);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Data tidak ditemukan atau tidak punya akses" });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("UPDATE DAILY PLAN ERROR:", err);
-    res.status(500).json({ message: "Update failed" });
   }
-});
+);
+
 
 
 // DELETE (SOFT)
