@@ -129,4 +129,5 @@ async function sendDailyPlanNotification({
 
 module.exports = {
   sendDailyPlanNotification,
+  getTargetUsers
 };
