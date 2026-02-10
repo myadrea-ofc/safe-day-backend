@@ -10,21 +10,19 @@ function resolveTargetRoles(creatorRole) {
 
 /* ================== BUILD MESSAGE ================== */
 function buildDailyPlanMessage({ creatorRole, title }) {
+  let senderName = "";
+  
   if (creatorRole === "superadmin") {
-    return {
-      title: "Daily Plan Baru",
-      body: `HO menambahkan Daily Plan: ${title}`,
-    };
+    senderName = "HO";
+  } else if (creatorRole === "admin") {
+    senderName = "HSES";
+  } else {
+    senderName = "Tim";
   }
-
-  if (creatorRole === "admin") {
-    return {
-      title: "Daily Plan Baru",
-      body: `HSES menambahkan Daily Plan: ${title}`,
-    };
-  }
-
-  return null;
+  return {
+    title: "📝 Daily Plan Baru Ready!",
+    body: `📢 Hai! ${senderName} baru aja buat Daily Plan nih 📋. Yuk, lihat dan kasih rating dulu! ⭐`,
+  };
 }
 
 /* ================== GET TARGET USERS ================== */
@@ -90,7 +88,7 @@ async function sendDailyPlanNotification({
 
   const message = buildDailyPlanMessage({ creatorRole, title });
 
-  /* ================== SIMPAN KE DB ================== */
+  // 🔔 SIMPAN KE DATABASE
   await saveNotifications({
     userIds,
     title: message.title,
@@ -101,7 +99,7 @@ async function sendDailyPlanNotification({
     },
   });
 
-  /* ================== AMBIL TOKEN ================== */
+  // 🔥 AMBIL TOKEN
   const tokensRes = await pool.query(
     `
     SELECT DISTINCT fcm_token
@@ -115,23 +113,19 @@ async function sendDailyPlanNotification({
   const tokens = tokensRes.rows.map(r => r.fcm_token);
   if (!tokens.length) return;
 
-  /* ================== KIRIM PUSH ================== */
+  // 🚀 KIRIM PUSH
   await admin.messaging().sendMulticast({
-  tokens,
-  notification: {
-    title: "Daily Plan Baru",
-    body: creatorRole === "superadmin"
-      ? `HO menambahkan: ${title}`
-      : `HSES menambahkan: ${title}`,
-  },
-  data: {
-    type: "daily_plan",
-    daily_plan_id: String(dailyPlanId),
-  },
-});
-
+    tokens,
+    notification: {
+      title: message.title,
+      body: message.body,
+    },
+    data: {
+      type: "daily_plan",
+      daily_plan_id: String(planId),
+    },
+  });
 }
-
 
 module.exports = {
   sendDailyPlanNotification,

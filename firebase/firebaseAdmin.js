@@ -4,7 +4,7 @@ const path = require("path");
 
 const serviceAccountPath = path.resolve(
   process.cwd(),
-  "secrets/firebase-service-account.json"
+  process.env.FIREBASE_SERVICE_ACCOUNT
 );
 
 if (!admin.apps.length) {
@@ -15,6 +15,8 @@ if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
+
+  console.log("🔥 Firebase Admin Initialized");
 }
 
 module.exports = admin;
