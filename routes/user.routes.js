@@ -198,24 +198,30 @@ router.get(
   }
 );
 
-
 router.post("/fcm-token", authMiddleware, async (req, res) => {
-  const { fcm_token } = req.body;
+  try {
+    const { token } = req.body;
 
-  if (!fcm_token) {
-    return res.status(400).json({ message: "FCM token required" });
+    if (!token) {
+      return res.status(400).json({ message: "Token required" });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO user_fcm_tokens (user_id, fcm_token)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id, fcm_token) DO NOTHING
+      `,
+      [req.user.id, token]
+    );
+
+    res.json({ message: "FCM token saved" });
+  } catch (err) {
+    console.error("Save FCM Token Error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  await pool.query(
-    `
-    INSERT INTO user_fcm_tokens (user_id, fcm_token)
-    VALUES ($1,$2)
-    ON CONFLICT DO NOTHING
-    `,
-    [req.user.id, fcm_token]
-  );
-
-  res.json({ success: true });
 });
+
+
 
 module.exports = router;
