@@ -57,7 +57,7 @@ async function saveNotifications({ userIds, title, body, data }) {
     values.push(
       `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`
     );
-    params.push(userId, title, body, data);
+    params.push(userId, title, body, JSON.stringify(data));
   });
 
   await pool.query(
