@@ -2,6 +2,7 @@
 const express = require("express");
 const router = express.Router();
 
+const jwtOnly = require("../middlewares/jwtOnly");
 const pool = require("../config/db");
 const bcrypt = require("bcryptjs");
 
@@ -198,7 +199,7 @@ router.get(
   }
 );
 
-router.post("/fcm-token", authMiddleware, async (req, res) => {
+router.post("/fcm-token", jwtOnly, async (req, res) => {
   try {
     const { token } = req.body;
 
