@@ -101,6 +101,31 @@ router.put(
         return res.status(400).json({ message: "Role tidak valid" });
       }
 
+      // 🔒 VALIDASI TAMBAHAN DI SINI
+      if (req.user.role !== "superadmin") {
+        const target = await pool.query(
+          `
+          SELECT r.role_name
+          FROM users u
+          JOIN roles r ON u.role_id = r.id
+          WHERE u.id = $1
+          `,
+          [req.params.id]
+        );
+
+        if (target.rowCount === 0) {
+          return res.status(404).json({ message: "User tidak ditemukan" });
+        }
+
+        if (target.rows[0].role_name === "superadmin") {
+          return res.status(403).json({ message: "Tidak boleh mengubah Superadmin" });
+        }
+
+        if (role === "superadmin") {
+          return res.status(403).json({ message: "Tidak boleh menjadikan Superadmin" });
+        }
+      }
+
       let sql = `
         UPDATE users
         SET role_id = $1
@@ -110,31 +135,30 @@ router.put(
 
       const params = [roleRes.rows[0].id, req.params.id];
 
-      // 🔒 ADMIN → BATASI SITE
       if (req.user.role !== "superadmin") {
         sql += ` AND site_id = $3`;
         params.push(req.user.site_id);
       }
 
-const result = await pool.query(sql, params);
+      const result = await pool.query(sql, params);
 
-if (result.rowCount === 0) {
-  return res.status(403).json({ message: "Tidak punya akses" });
-}
+      if (result.rowCount === 0) {
+        return res.status(403).json({ message: "Tidak punya akses" });
+      }
 
-await pool.query(
-  `
-  UPDATE user_sessions
-  SET is_active = false,
-      logout_at = NOW(),
-      logout_reason = 'role_changed'
-  WHERE user_id = $1
-    AND is_active = true
-  `,
-  [req.params.id]
-);
+      await pool.query(
+        `
+        UPDATE user_sessions
+        SET is_active = false,
+            logout_at = NOW(),
+            logout_reason = 'role_changed'
+        WHERE user_id = $1
+          AND is_active = true
+        `,
+        [req.params.id]
+      );
 
-res.json({ success: true });
+      res.json({ success: true });
 
     } catch (err) {
       console.error(err);
@@ -142,6 +166,7 @@ res.json({ success: true });
     }
   }
 );
+
 
 router.get(
   "/profile",
@@ -162,36 +187,47 @@ router.get(
       }
 
       let sql = `
-        SELECT id, name 
-        FROM users 
-        WHERE department_id = $1 
-          AND deleted_at IS NULL
+        SELECT u.id, u.name
+        FROM users u
+        JOIN roles r ON u.role_id = r.id
+        WHERE u.department_id = $1
+          AND u.deleted_at IS NULL
       `;
+
       const params = [department_id];
 
       // 🔒 Site filtering
       if (req.user.role === "superadmin") {
         if (site_id) {
-          sql += " AND site_id = $2";
           params.push(site_id);
+          sql += ` AND u.site_id = $${params.length}`;
         }
       } else {
-        sql += " AND site_id = $2";
         params.push(req.user.site_id);
+        sql += ` AND u.site_id = $${params.length}`;
       }
 
-      // 🔍 Search by name
+      // 🔒 ADMIN tidak boleh lihat superadmin
+      if (req.user.role !== "superadmin") {
+        params.push("superadmin");
+        sql += ` AND r.role_name != $${params.length}`;
+      }
+
+      // 🔍 Search
       if (search) {
         params.push(`%${search.toLowerCase()}%`);
-        sql += ` AND LOWER(name) LIKE $${params.length}`;
+        sql += ` AND LOWER(u.name) LIKE $${params.length}`;
       }
 
       // Pagination
-      sql += ` ORDER BY name ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(parseInt(limit, 10), parseInt(offset, 10));
+      params.push(parseInt(limit, 10));
+      params.push(parseInt(offset, 10));
+
+      sql += ` ORDER BY u.name ASC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
       const result = await pool.query(sql, params);
       res.json(result.rows);
+
     } catch (err) {
       console.error("LIST USERS ERROR:", err);
       res.status(500).json({ message: "Gagal mengambil daftar user" });
@@ -199,30 +235,31 @@ router.get(
   }
 );
 
-router.post("/fcm-token", jwtOnly, async (req, res) => {
+
+
+router.post("/fcm-token", authenticate, async (req, res) => {
+  const { fcm_token } = req.body;
+
+  if (!fcm_token) {
+    return res.status(400).json({ message: "Token required" });
+  }
+
   try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ message: "Token required" });
-    }
-
     await pool.query(
       `
       INSERT INTO user_fcm_tokens (user_id, fcm_token)
       VALUES ($1, $2)
       ON CONFLICT (user_id, fcm_token) DO NOTHING
       `,
-      [req.user.id, token]
+      [req.user.id, fcm_token]
     );
 
-    res.json({ message: "FCM token saved" });
+    res.json({ message: "Token saved" });
   } catch (err) {
-    console.error("Save FCM Token Error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error(err);
+    res.status(500).json({ message: "Failed save token" });
   }
 });
-
 
 
 module.exports = router;

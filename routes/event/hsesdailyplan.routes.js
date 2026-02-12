@@ -34,12 +34,20 @@ router.post(
     try {
       const { judul, subJudul, deskripsi, site_ids } = req.body;
 
-     let sites = site_ids;
+      let sites = req.body.site_ids;
 
-      if (!sites) {
-        sites = [];
-      } else if (!Array.isArray(sites)) {
-        sites = [sites];
+      // 🔥 HANDLE FORMAT JSON STRING
+      if (typeof sites === "string") {
+        try {
+          sites = JSON.parse(sites);
+        } catch (err) {
+          sites = [sites];
+        }
+      }
+
+      // 🔥 HANDLE FORMAT ARRAY
+      if (!Array.isArray(sites)) {
+        sites = sites ? [sites] : [];
       }
 
       sites = sites.map(Number);
@@ -53,6 +61,12 @@ router.post(
       if (req.user.role === "admin") {
         sites = [req.user.site_id];
       }
+
+      console.log("===== DEBUG DAILY PLAN CREATE =====");
+      console.log("CREATOR ID:", req.user.id);
+      console.log("CREATOR ROLE:", req.user.role);
+      console.log("CREATOR SITE:", req.user.site_id);
+      console.log("FINAL TARGET SITES:", sites);
 
       // CREATE DAILY PLAN
       const plan = await pool.query(
@@ -89,6 +103,8 @@ router.post(
           siteIds: sites,
           creatorId: req.user.id,
         });
+
+        console.log("TARGET USER IDS:", userIds);
 
         await sendDailyPlanNotification({
           creatorRole: req.user.role,
@@ -175,16 +191,23 @@ router.put(
       const { id } = req.params;
       const { judul, subJudul, deskripsi, site_ids } = req.body;
 
-      /* ================== NORMALISASI SITE IDS ================== */
-      let sites = site_ids;
+        let sites = req.body.site_ids;
 
-      if (!sites) {
-        sites = [];
-      } else if (!Array.isArray(sites)) {
-        sites = [sites];
-      }
+        // HANDLE FORMAT JSON STRING
+        if (typeof sites === "string") {
+          try {
+            sites = JSON.parse(sites);
+          } catch (err) {
+            sites = [sites];
+          }
+        }
 
-      sites = sites.map(Number);
+        // HANDLE FORMAT ARRAY / SINGLE VALUE
+        if (!Array.isArray(sites)) {
+          sites = sites ? [sites] : [];
+        }
+
+        sites = sites.map(Number);
 
       // admin hanya boleh 1 site
       if (req.user.role === "admin") {
