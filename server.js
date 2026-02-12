@@ -300,25 +300,13 @@ app.get("/departments", async (req, res) => {
 });
 
 app.get("/validate-session", authMiddleware, async (req, res) => {
-  try {
-    const token = req.token;
-    const deviceId = req.headers["x-device-id"];
-
-    const session = await pool.query(
-      `SELECT id FROM user_sessions
-       WHERE token=$1 AND device_id=$2 AND is_active=true`,
-      [token, deviceId]
-    );
-
-    if (session.rowCount === 0) {
-      return res.json({ valid: false });
-    }
-
-    return res.json({ valid: true });
-  } catch (err) {
-    return res.status(500).json({ valid: false });
-  }
+  return res.json({
+    valid: true,
+    user: req.user
+  });
 });
+
+
 
 
 setInterval(async () => {
