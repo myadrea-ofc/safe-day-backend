@@ -237,7 +237,7 @@ router.get(
 
 
 
-router.post("/fcm-token", authenticate, async (req, res) => {
+router.post("/fcm-token", authMiddleware, async (req, res) => {
   const { fcm_token } = req.body;
 
   if (!fcm_token) {
