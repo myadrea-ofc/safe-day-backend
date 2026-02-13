@@ -28,6 +28,12 @@ function buildDailyPlanMessage({ creatorRole, title }) {
 
 /* ================== GET TARGET USERS ================== */
 async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
+  console.log("=== DEBUG getTargetUsers ===");
+  console.log("CREATOR ROLE:", creatorRole);
+  console.log("SITE IDS:", siteIds);
+  console.log("CREATOR ID:", creatorId);
+  console.log("TYPEOF SITE IDS:", typeof siteIds);
+  console.log("IS ARRAY:", Array.isArray(siteIds));
   const roles = resolveTargetRoles(creatorRole);
   if (!roles.length) return [];
 
