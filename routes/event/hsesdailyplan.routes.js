@@ -31,6 +31,8 @@ router.post(
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
   async (req, res) => {
+    print(response.body);
+
     try {
       const { judul, subJudul, deskripsi, site_ids } = req.body;
 
@@ -98,21 +100,32 @@ router.post(
           );
         }
         /* ================== PUSH NOTIFICATION ================== */
-        const userIds = await getTargetUsers({
-          creatorRole: req.user.role,
-          siteIds: sites,
-          creatorId: req.user.id,
-        });
+        // const userIds = await getTargetUsers({
+        //   creatorRole: req.user.role,
+        //   siteIds: sites,
+        //   creatorId: req.user.id,
+        // });
 
-        console.log("TARGET USER IDS:", userIds);
+        // console.log("TARGET USER IDS:", userIds);
 
-        await sendDailyPlanNotification({
-          creatorRole: req.user.role,
-          siteIds: sites,
-          creatorId: req.user.id,
-          title: judul,
-          planId,
-        });
+        const debugData = await getTargetUsers({
+  creatorRole: req.user.role,
+  siteIds: sites,
+  creatorId: req.user.id,
+});
+
+return res.json({
+  debug: debugData
+});
+
+
+        // await sendDailyPlanNotification({
+        //   creatorRole: req.user.role,
+        //   siteIds: sites,
+        //   creatorId: req.user.id,
+        //   title: judul,
+        //   planId,
+        // });
 
 
       res.status(201).json(plan.rows[0]);
