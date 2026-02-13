@@ -139,36 +139,37 @@ router.get("/", authMiddleware, async (req, res) => {
 
     const query = `
       SELECT
-        p.id,
-        p.judul,
-        p.sub_judul,
-        p.deskripsi,
-        p.gambar,
-        p.created_at,
-        p.created_by,
-        u.site_id AS created_by_site_id,
-        r.role_name AS created_by_role,
-        lr.rating,
-        lr.comment,
-        ARRAY_AGG(ps.site_id) FILTER (WHERE ps.site_id IS NOT NULL) AS site_ids
-      FROM hses_daily_plan p
-      LEFT JOIN hses_daily_plan_sites ps
-        ON ps.daily_plan_id = p.id
-      LEFT JOIN users u
-        ON u.id = p.created_by
-      LEFT JOIN roles r
-        ON r.id = u.role_id
-      LEFT JOIN LATERAL (
-        SELECT rating, comment
-        FROM hses_daily_plan_reviews
-        WHERE daily_plan_id = p.id
-          AND user_id = $1
-        LIMIT 1
-      ) lr ON true
-      WHERE p.deleted_at IS NULL
-        ${siteCondition}
-      GROUP BY p.id, u.id, r.id, lr.rating, lr.comment
-      ORDER BY p.created_at DESC
+  p.id,
+  p.judul,
+  p.sub_judul,
+  p.deskripsi,
+  p.gambar,
+  p.created_at,
+  p.created_by,
+  u.site_id AS created_by_site_id,
+  r.role_name AS created_by_role,
+  lr.rating,
+  lr.comment,
+  ARRAY_AGG(ps.site_id) AS site_ids
+FROM hses_daily_plan p
+LEFT JOIN hses_daily_plan_sites ps
+  ON ps.daily_plan_id = p.id
+LEFT JOIN users u
+  ON u.id = p.created_by
+LEFT JOIN roles r
+  ON r.id = u.role_id
+LEFT JOIN LATERAL (
+  SELECT rating, comment
+  FROM hses_daily_plan_reviews
+  WHERE daily_plan_id = p.id
+    AND user_id = $1
+  LIMIT 1
+) lr ON true
+WHERE p.deleted_at IS NULL
+${siteCondition}
+GROUP BY p.id, u.id, r.id, lr.rating, lr.comment
+ORDER BY p.created_at DESC
+
     `;
 
     const result = await pool.query(query, params);
