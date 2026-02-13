@@ -27,49 +27,13 @@ function buildDailyPlanMessage({ creatorRole, title }) {
 }
 
 /* ================== GET TARGET USERS ================== */
-// async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
-//   console.log("SITE IDS PASSED:", siteIds);
-
-//   const roles = resolveTargetRoles(creatorRole);
-//   if (!roles.length) return [];
-
-//   const debugUsers = await pool.query(`
-//   SELECT id, site_id, role_id
-//   FROM users
-//   WHERE role_id IS NOT NULL
-// `);
-
-// console.log("ALL USERS DEBUG:", debugUsers.rows);
-
-
-//   const result = await pool.query(
-//     `
-//     SELECT u.id
-//     FROM users u
-//     JOIN roles r ON r.id = u.role_id
-//     WHERE r.role_name = ANY($1::text[])
-//       AND u.site_id = ANY($2::int[])
-//       AND u.deleted_at IS NULL
-//       AND u.id != $3
-//     `,
-//     [roles, siteIds, creatorId]
-//   );
-
-//   return result.rows.map(r => r.id);
-// }
-
 async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
   const roles = resolveTargetRoles(creatorRole);
-
-  const debugUsers = await pool.query(`
-    SELECT id, site_id, role_id
-    FROM users
-    WHERE role_id IS NOT NULL
-  `);
+  if (!roles.length) return [];
 
   const result = await pool.query(
     `
-    SELECT u.id, u.site_id
+    SELECT u.id
     FROM users u
     JOIN roles r ON r.id = u.role_id
     WHERE r.role_name = ANY($1::text[])
@@ -80,14 +44,8 @@ async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
     [roles, siteIds, creatorId]
   );
 
-  return {
-    siteIdsPassed: siteIds,
-    resolvedRoles: roles,
-    allUsers: debugUsers.rows,
-    matchedUsers: result.rows,
-  };
+  return result.rows.map(r => r.id);
 }
-
 
 /* ================== SAVE NOTIFICATIONS ================== */
 async function saveNotifications({ userIds, title, body, data }) {
