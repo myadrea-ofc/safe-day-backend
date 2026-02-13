@@ -31,7 +31,6 @@ router.post(
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
   async (req, res) => {
-    print(response.body);
 
     try {
       const { judul, subJudul, deskripsi, site_ids } = req.body;
@@ -108,15 +107,19 @@ router.post(
 
         // console.log("TARGET USER IDS:", userIds);
 
-        const debugData = await getTargetUsers({
+const debugData = await getTargetUsers({
   creatorRole: req.user.role,
   siteIds: sites,
   creatorId: req.user.id,
 });
 
-return res.json({
-  debug: debugData
+console.log("DEBUG TARGET USERS:", debugData);
+
+return res.status(200).json({
+  message: "DEBUG MODE",
+  targetUsers: debugData
 });
+
 
 
         // await sendDailyPlanNotification({
@@ -129,10 +132,11 @@ return res.json({
 
 
       res.status(201).json(plan.rows[0]);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "Insert failed" });
-    }
+    }catch (err) {
+  console.error("ERROR DAILY PLAN:", err);
+  res.status(500).json({ message: err.message });
+}
+
   }
 );
 
