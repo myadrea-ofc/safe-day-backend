@@ -236,7 +236,6 @@ router.get(
 );
 
 
-
 router.post("/fcm-token", authMiddleware, async (req, res) => {
   const { fcm_token } = req.body;
 
@@ -245,21 +244,28 @@ router.post("/fcm-token", authMiddleware, async (req, res) => {
   }
 
   try {
+    // 🔥 Hapus token lama yang mungkin terikat ke user lain
+    await pool.query(
+      `DELETE FROM user_fcm_tokens WHERE fcm_token = $1`,
+      [fcm_token]
+    );
+
+    // 🔥 Insert ulang untuk user yang sedang login
     await pool.query(
       `
       INSERT INTO user_fcm_tokens (user_id, fcm_token)
       VALUES ($1, $2)
-      ON CONFLICT (user_id, fcm_token) DO NOTHING
       `,
       [req.user.id, fcm_token]
     );
 
-    res.json({ message: "Token saved" });
+    res.json({ message: "Token replaced & saved" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed save token" });
   }
 });
+
 
 
 module.exports = router;
