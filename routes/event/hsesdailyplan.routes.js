@@ -32,30 +32,28 @@ router.post(
   upload.single("gambar"),
   async (req, res) => {
     try {
-      const { judul, subJudul, deskripsi, site_ids } = req.body;
+      const { judul, subJudul, deskripsi } = req.body;
 
       let sites = req.body.site_ids;
 
-      // 🔥 HANDLE FORMAT JSON STRING
       if (typeof sites === "string") {
         try {
           sites = JSON.parse(sites);
-        } catch (err) {
+        } catch {
           sites = [sites];
         }
       }
 
-      // 🔥 HANDLE FORMAT ARRAY
       if (!Array.isArray(sites)) {
         sites = sites ? [sites] : [];
       }
 
-      sites = sites.map(Number);
+      sites = sites
+        .map(Number)
+        .filter((id) => !isNaN(id));
 
       if (req.user.role === "superadmin" && sites.length === 0) {
-        return res.status(400).json({
-          message: "Minimal 1 site harus dipilih",
-        });
+        return res.status(400).json({ message: "Minimal 1 site harus dipilih" });
       }
 
       if (req.user.role === "admin") {
@@ -68,7 +66,6 @@ router.post(
       console.log("CREATOR SITE:", req.user.site_id);
       console.log("FINAL TARGET SITES:", sites);
 
-      // CREATE DAILY PLAN
       const plan = await pool.query(
         `
         INSERT INTO hses_daily_plan
@@ -76,52 +73,37 @@ router.post(
         VALUES ($1,$2,$3,$4,$5)
         RETURNING *
         `,
-        [
-          judul,
-          subJudul,
-          deskripsi,
-          req.file ? req.file.filename : null,
-          req.user.id,
-        ]
+        [judul, subJudul, deskripsi, req.file ? req.file.filename : null, req.user.id]
       );
 
       const planId = plan.rows[0].id;
 
-        // INSERT SITE RELATION
-        for (const siteId of sites) {
-          await pool.query(
-            `
-            INSERT INTO hses_daily_plan_sites (daily_plan_id, site_id)
-            VALUES ($1,$2)
-            `,
-            [planId, siteId]
-          );
-        }
-        /* ================== PUSH NOTIFICATION ================== */
-        const userIds = await getTargetUsers({
-          creatorRole: req.user.role,
-          siteIds: sites,
-          creatorId: req.user.id,
-        });
+      for (const siteId of sites) {
+        await pool.query(
+          `
+          INSERT INTO hses_daily_plan_sites (daily_plan_id, site_id)
+          VALUES ($1,$2)
+          `,
+          [planId, siteId]
+        );
+      }
 
-        console.log("TARGET USER IDS:", userIds);
+      await sendDailyPlanNotification({
+        creatorRole: req.user.role,
+        siteIds: sites,
+        creatorId: req.user.id,
+        title: judul,
+        planId,
+      });
 
-        await sendDailyPlanNotification({
-          creatorRole: req.user.role,
-          siteIds: sites,
-          creatorId: req.user.id,
-          title: judul,
-          planId,
-        });
-
-
-      res.status(201).json(plan.rows[0]);
+      return res.status(201).json(plan.rows[0]);
     } catch (err) {
       console.error(err);
-      res.status(500).json({ message: "Insert failed" });
+      return res.status(500).json({ message: "Insert failed" });
     }
   }
 );
+
 
 router.get("/", authMiddleware, async (req, res) => {
   try {

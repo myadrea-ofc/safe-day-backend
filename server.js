@@ -119,15 +119,16 @@ app.use("/notifications", notificationRoutes)
 
 
 app.post("/login", async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id } = req.body;
+    const { name, password, site_id, department_id, device_id, fcm_token } = req.body;
 
     if (!name || !password || !site_id || !department_id || !device_id) {
       return res.status(400).json({ message: "Data login tidak lengkap" });
     }
 
-    // 1️⃣ Cari user
-    const result = await pool.query(
+    /* ================= CARI USER ================= */
+    const result = await client.query(
       `
       SELECT u.id, u.name, u.password,
              u.role_id, r.role_name,
@@ -143,21 +144,19 @@ app.post("/login", async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(401).json({
-        message: "User / site / department tidak cocok",
-      });
+      return res.status(401).json({ message: "User / site / department tidak cocok" });
     }
 
     const user = result.rows[0];
 
-    // 2️⃣ Cek password
+    /* ================= CEK PASSWORD ================= */
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah" });
     }
 
-    // 🔥 3️⃣ CEK SESSION AKTIF DI DEVICE LAIN (INI INTINYA)
-    const activeSession = await pool.query(
+    /* ================= CEK DEVICE LAIN ================= */
+    const activeSession = await client.query(
       `
       SELECT id
       FROM user_sessions
@@ -170,13 +169,11 @@ app.post("/login", async (req, res) => {
     );
 
     if (activeSession.rowCount > 0) {
-      return res.status(409).json({
-        message: "Akun ini sedang login di device lain",
-      });
+      return res.status(409).json({ message: "Akun ini sedang login di device lain" });
     }
 
-    // 4️⃣ Matikan session lama (relogin device yang sama)
-    await pool.query(
+    /* ================= MATIKAN SESSION LAMA ================= */
+    await client.query(
       `
       UPDATE user_sessions
       SET is_active = false,
@@ -189,7 +186,7 @@ app.post("/login", async (req, res) => {
       [user.id]
     );
 
-    // 5️⃣ Generate token baru
+    /* ================= GENERATE JWT ================= */
     const token = jwt.sign(
       {
         id: user.id,
@@ -202,8 +199,8 @@ app.post("/login", async (req, res) => {
       { expiresIn: "3d" }
     );
 
-    // 6️⃣ Simpan session baru
-    await pool.query(
+    /* ================= SIMPAN SESSION ================= */
+    await client.query(
       `
       INSERT INTO user_sessions
       (user_id, token, device_id, is_active, expired_at, last_seen)
@@ -211,6 +208,43 @@ app.post("/login", async (req, res) => {
       `,
       [user.id, token, device_id]
     );
+
+    /* ================= SIMPAN DEVICE + FCM ================= */
+    const cleanToken = (fcm_token ?? "").toString().trim();
+
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
+      try {
+        // Lepaskan token dari user lain
+        await client.query(
+          `
+          DELETE FROM user_devices
+          WHERE fcm_token = $1
+            AND user_id <> $2
+          `,
+          [cleanToken, user.id]
+        );
+
+        // Upsert device -> token
+        await client.query(
+          `
+          INSERT INTO user_devices (user_id, device_id, fcm_token, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (user_id, device_id)
+          DO UPDATE SET
+            fcm_token = EXCLUDED.fcm_token,
+            updated_at = NOW()
+          `,
+          [user.id, device_id, cleanToken]
+        );
+
+        await client.query("COMMIT");
+        console.log("✅ Device + FCM saved:", user.id);
+      } catch (e) {
+        await client.query("ROLLBACK");
+        console.error("❌ Save device token error:", e);
+      }
+    }
 
     return res.json({
       token,
@@ -225,8 +259,14 @@ app.post("/login", async (req, res) => {
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Login gagal" });
+  } finally {
+    client.release();
   }
 });
+
+
+
+
 
 
 app.post("/logout", authMiddleware, async (req, res) => {

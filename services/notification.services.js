@@ -96,23 +96,19 @@ async function sendDailyPlanNotification({
 }) {
   try {
     // ✅ NORMALIZE siteIds
-    
-if (typeof siteIds === "string") {
-  try {
-    siteIds = JSON.parse(siteIds);
-  } catch {
-    siteIds = [];
-  }
-}
+    if (typeof siteIds === "string") {
+      try {
+        siteIds = JSON.parse(siteIds);
+      } catch {
+        siteIds = [];
+      }
+    }
 
-if (!Array.isArray(siteIds)) {
-  siteIds = [siteIds];
-}
-
+    if (!Array.isArray(siteIds)) siteIds = [siteIds];
 
     siteIds = [...new Set(siteIds)]
-      .map(id => Number(id))
-      .filter(id => !isNaN(id));
+      .map((id) => Number(id))
+      .filter((id) => !isNaN(id));
 
     if (siteIds.length === 0) {
       console.log("❌ No valid siteIds provided");
@@ -120,15 +116,18 @@ if (!Array.isArray(siteIds)) {
     }
 
     console.log(`📨 Sending Daily Plan ID: ${planId}`);
+    console.log("CREATOR ROLE:", creatorRole);
+    console.log("SITE IDS:", siteIds);
+    console.log("CREATOR ID:", creatorId);
 
+    // ✅ target users
     const userIds = await getTargetUsers({
       creatorRole,
       siteIds,
       creatorId,
     });
 
-    console.log("TARGET USER IDS:", userIds.length);
-
+    console.log("TARGET USER IDS COUNT:", userIds.length);
     if (!userIds.length) {
       console.log("❌ No target users found");
       return;
@@ -136,7 +135,7 @@ if (!Array.isArray(siteIds)) {
 
     const message = buildDailyPlanMessage({ creatorRole, title });
 
-    // ================= SAVE TO DB =================
+    // ✅ SAVE notifications to DB
     await saveNotifications({
       userIds,
       title: message.title,
@@ -147,31 +146,29 @@ if (!Array.isArray(siteIds)) {
       },
     });
 
-    // ================= GET TOKENS =================
+    // ✅ GET TOKENS from user_devices
     const tokensRes = await pool.query(
       `
       SELECT DISTINCT fcm_token
-      FROM user_fcm_tokens
+      FROM user_devices
       WHERE user_id = ANY($1::int[])
         AND fcm_token IS NOT NULL
+        AND fcm_token <> ''
       `,
       [userIds]
     );
 
-    const tokens = tokensRes.rows.map(r => r.fcm_token);
-
-    console.log("TOKENS LIST:", tokens);
+    const tokens = (tokensRes.rows || []).map((r) => r.fcm_token).filter(Boolean);
 
     console.log("TOKENS FOUND:", tokens.length);
-
     if (!tokens.length) {
       console.log("❌ No FCM tokens found");
       return;
     }
 
-    // ================= SEND FCM (BATCH MAX 500) =================
+    // ✅ SEND FCM (BATCH MAX 500)
     const tokenChunks = chunkArray(tokens, 500);
-    let allInvalidTokens = [];
+    const invalidTokenSet = new Set();
 
     for (const chunk of tokenChunks) {
       const response = await admin.messaging().sendEachForMulticast({
@@ -191,35 +188,39 @@ if (!Array.isArray(siteIds)) {
 
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
-          const errorCode = resp.error?.code;
+          const code = resp.error?.code;
+          const failedToken = chunk[idx];
+
+          console.log("❌ FCM ERROR:", code, "TOKEN:", failedToken);
 
           if (
-            errorCode === "messaging/registration-token-not-registered" ||
-            errorCode === "messaging/invalid-registration-token"
+            code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token"
           ) {
-            allInvalidTokens.push(chunk[idx]);
+            invalidTokenSet.add(failedToken);
           }
         }
       });
     }
 
-    // ================= CLEAN INVALID TOKENS =================
+    // ✅ CLEAN INVALID TOKENS in user_devices
+    const allInvalidTokens = Array.from(invalidTokenSet);
     if (allInvalidTokens.length > 0) {
       console.log("🧹 Removing invalid tokens:", allInvalidTokens.length);
 
       await pool.query(
         `
-        DELETE FROM user_fcm_tokens
+        DELETE FROM user_devices
         WHERE fcm_token = ANY($1::text[])
         `,
         [allInvalidTokens]
       );
     }
-
   } catch (err) {
     console.error("❌ ERROR SEND DAILY PLAN NOTIFICATION:", err);
   }
 }
+
 
 module.exports = {
   sendDailyPlanNotification,

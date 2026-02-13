@@ -238,33 +238,39 @@ router.get(
 
 router.post("/fcm-token", authMiddleware, async (req, res) => {
   const { fcm_token } = req.body;
+  const deviceId = req.headers["x-device-id"];
 
-  if (!fcm_token) {
-    return res.status(400).json({ message: "Token required" });
-  }
+  if (!fcm_token) return res.status(400).json({ message: "Token required" });
+  if (!deviceId) return res.status(400).json({ message: "Device ID required" });
 
   try {
-    // 🔥 Hapus token lama yang mungkin terikat ke user lain
+    // pastikan token tidak nyangkut di user/device lain
     await pool.query(
-      `DELETE FROM user_fcm_tokens WHERE fcm_token = $1`,
+      `DELETE FROM user_devices WHERE fcm_token = $1`,
       [fcm_token]
     );
 
-    // 🔥 Insert ulang untuk user yang sedang login
+    // upsert token untuk user+device sekarang
     await pool.query(
       `
-      INSERT INTO user_fcm_tokens (user_id, fcm_token)
-      VALUES ($1, $2)
+      INSERT INTO user_devices (user_id, device_id, fcm_token, updated_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (user_id, device_id)
+      DO UPDATE SET
+        fcm_token = EXCLUDED.fcm_token,
+        updated_at = NOW()
       `,
-      [req.user.id, fcm_token]
+      [req.user.id, deviceId, fcm_token]
     );
 
-    res.json({ message: "Token replaced & saved" });
+    return res.json({ message: "Token saved (user_devices)" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed save token" });
+    console.error("FCM TOKEN SAVE ERROR:", err);
+    return res.status(500).json({ message: "Failed save token" });
   }
 });
+
+
 
 
 
