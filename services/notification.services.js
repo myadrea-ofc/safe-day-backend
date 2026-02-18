@@ -8,32 +8,46 @@ function resolveTargetRoles(creatorRole) {
   return [];
 }
 
-/* ================== BUILD MESSAGE ================== */
-function buildDailyPlanMessage({ creatorRole, title }) {
-  let senderName = "";
-
-  if (creatorRole === "superadmin") {
-    senderName = "HO";
-  } else if (creatorRole === "admin") {
-    senderName = "HSES";
-  } else {
-    senderName = "Tim";
+/* ================== NORMALIZE SITE IDS ================== */
+function normalizeSiteIds(siteIds) {
+  if (typeof siteIds === "string") {
+    try {
+      siteIds = JSON.parse(siteIds);
+    } catch {
+      siteIds = [siteIds];
+    }
   }
+
+  if (!Array.isArray(siteIds)) siteIds = siteIds ? [siteIds] : [];
+
+  return [...new Set(siteIds)]
+    .map((id) => Number(id))
+    .filter((id) => !isNaN(id));
+}
+
+/* ================== BUILD MESSAGE ================== */
+function buildDailyPlanMessage({ creatorRole }) {
+  const senderName =
+    creatorRole === "superadmin" ? "HO" : creatorRole === "admin" ? "HSES" : "Tim";
 
   return {
     title: "📝 Daily Plan Baru Ready!",
-    body: `📢 Hai! ${senderName} baru aja buat Daily Plan nihh 📋. Yuk, lihat dan kasih rating dulu ya! ⭐`,
+    body: `📢 Hai! ${senderName} baru aja buat Daily Plan nih 📋. Yuk, lihat dan kasih rating dulu ya! ⭐`,
+  };
+}
+
+function buildBuletinMessage({ creatorRole }) {
+  return {
+    title: "📰 Buletin Baru!",
+    body:
+      creatorRole === "superadmin"
+        ? "📢 HO upload Buletin baru. Yuk dibaca!"
+        : "📢 HSES upload Buletin baru. Yuk dibaca!",
   };
 }
 
 /* ================== GET TARGET USERS ================== */
 async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
-  console.log("=== DEBUG getTargetUsers ===");
-  console.log("CREATOR ROLE:", creatorRole);
-  console.log("SITE IDS:", siteIds);
-  console.log("CREATOR ID:", creatorId);
-  console.log("TYPEOF SITE IDS:", typeof siteIds);
-  console.log("IS ARRAY:", Array.isArray(siteIds));
   const roles = resolveTargetRoles(creatorRole);
   if (!roles.length) return [];
 
@@ -50,7 +64,7 @@ async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
     [roles, siteIds, creatorId]
   );
 
-  return result.rows.map(r => r.id);
+  return result.rows.map((r) => r.id);
 }
 
 /* ================== SAVE NOTIFICATIONS ================== */
@@ -62,9 +76,7 @@ async function saveNotifications({ userIds, title, body, data }) {
 
   userIds.forEach((userId, index) => {
     const base = index * 4;
-    values.push(
-      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`
-    );
+    values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`);
     params.push(userId, title, body, JSON.stringify(data));
   });
 
@@ -77,7 +89,7 @@ async function saveNotifications({ userIds, title, body, data }) {
   );
 }
 
-/* ================== HELPER BATCH ================== */
+/* ================== HELPERS ================== */
 function chunkArray(array, size) {
   const result = [];
   for (let i = 0; i < array.length; i += size) {
@@ -86,7 +98,34 @@ function chunkArray(array, size) {
   return result;
 }
 
-/* ================== SEND NOTIFICATION ================== */
+async function getFcmTokensByUserIds(userIds) {
+  const tokensRes = await pool.query(
+    `
+    SELECT DISTINCT fcm_token
+    FROM user_devices
+    WHERE user_id = ANY($1::int[])
+      AND fcm_token IS NOT NULL
+      AND fcm_token <> ''
+    `,
+    [userIds]
+  );
+
+  return (tokensRes.rows || []).map((r) => r.fcm_token).filter(Boolean);
+}
+
+async function deleteInvalidTokens(tokens) {
+  if (!tokens.length) return;
+
+  await pool.query(
+    `
+    DELETE FROM user_devices
+    WHERE fcm_token = ANY($1::text[])
+    `,
+    [tokens]
+  );
+}
+
+/* ================== SEND DAILY PLAN ================== */
 async function sendDailyPlanNotification({
   creatorRole,
   siteIds,
@@ -95,141 +134,125 @@ async function sendDailyPlanNotification({
   planId,
 }) {
   try {
-    // ✅ NORMALIZE siteIds
-    if (typeof siteIds === "string") {
-      try {
-        siteIds = JSON.parse(siteIds);
-      } catch {
-        siteIds = [];
-      }
-    }
+    siteIds = normalizeSiteIds(siteIds);
+    if (!siteIds.length) return console.log("❌ No valid siteIds (daily_plan)");
 
-    if (!Array.isArray(siteIds)) siteIds = [siteIds];
-
-    siteIds = [...new Set(siteIds)]
-      .map((id) => Number(id))
-      .filter((id) => !isNaN(id));
-
-    if (siteIds.length === 0) {
-      console.log("❌ No valid siteIds provided");
-      return;
-    }
-
-    console.log(`📨 Sending Daily Plan ID: ${planId}`);
-    console.log("CREATOR ROLE:", creatorRole);
-    console.log("SITE IDS:", siteIds);
-    console.log("CREATOR ID:", creatorId);
-
-    // ✅ target users
-    const userIds = await getTargetUsers({
-      creatorRole,
-      siteIds,
-      creatorId,
-    });
-
-    console.log("TARGET USER IDS COUNT:", userIds.length);
-    if (!userIds.length) {
-      console.log("❌ No target users found");
-      return;
-    }
+    const userIds = await getTargetUsers({ creatorRole, siteIds, creatorId });
+    if (!userIds.length) return console.log("❌ No target users (daily_plan)");
 
     const message = buildDailyPlanMessage({ creatorRole, title });
 
-    // ✅ SAVE notifications to DB
     await saveNotifications({
       userIds,
       title: message.title,
       body: message.body,
-      data: {
-        type: "daily_plan",
-        daily_plan_id: planId,
-      },
+      data: { type: "daily_plan", daily_plan_id: planId },
     });
 
-    // ✅ GET TOKENS from user_devices
-    const tokensRes = await pool.query(
-      `
-      SELECT DISTINCT fcm_token
-      FROM user_devices
-      WHERE user_id = ANY($1::int[])
-        AND fcm_token IS NOT NULL
-        AND fcm_token <> ''
-      `,
-      [userIds]
-    );
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (daily_plan)");
 
-    const tokens = (tokensRes.rows || []).map((r) => r.fcm_token).filter(Boolean);
-
-    console.log("TOKENS FOUND:", tokens.length);
-    if (!tokens.length) {
-      console.log("❌ No FCM tokens found");
-      return;
-    }
-
-    // ✅ SEND FCM (BATCH MAX 500)
     const tokenChunks = chunkArray(tokens, 500);
-    const invalidTokenSet = new Set();
+    const invalidSet = new Set();
 
     for (const chunk of tokenChunks) {
-      const response = await admin.messaging().sendEachForMulticast({
+      const resp = await admin.messaging().sendEachForMulticast({
         tokens: chunk,
-        notification: {
-          title: message.title,
-          body: message.body,
-        },
+        notification: { title: message.title, body: message.body },
         android: {
-    priority: "high",
-    notification: {
-      channelId: "high_importance_channel",
-      sound: "default",
-    },
-  },
-        data: {
-          type: "daily_plan",
-          daily_plan_id: String(planId),
+          priority: "high",
+          notification: {
+            channelId: "high_importance_channel",
+            sound: "default",
+          },
         },
+        data: { type: "daily_plan", daily_plan_id: String(planId) },
       });
 
-      console.log("FCM SUCCESS:", response.successCount);
-      console.log("FCM FAIL:", response.failureCount);
-
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          const code = resp.error?.code;
-          const failedToken = chunk[idx];
-
-          console.log("❌ FCM ERROR:", code, "TOKEN:", failedToken);
-
+      resp.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = r.error?.code;
           if (
             code === "messaging/registration-token-not-registered" ||
             code === "messaging/invalid-registration-token"
           ) {
-            invalidTokenSet.add(failedToken);
+            invalidSet.add(chunk[idx]);
           }
         }
       });
     }
 
-    // ✅ CLEAN INVALID TOKENS in user_devices
-    const allInvalidTokens = Array.from(invalidTokenSet);
-    if (allInvalidTokens.length > 0) {
-      console.log("🧹 Removing invalid tokens:", allInvalidTokens.length);
-
-      await pool.query(
-        `
-        DELETE FROM user_devices
-        WHERE fcm_token = ANY($1::text[])
-        `,
-        [allInvalidTokens]
-      );
-    }
+    await deleteInvalidTokens([...invalidSet]);
   } catch (err) {
     console.error("❌ ERROR SEND DAILY PLAN NOTIFICATION:", err);
   }
 }
 
+/* ================== SEND BULETIN ================== */
+async function sendBuletinNotification({
+  creatorRole,
+  siteIds,
+  creatorId,
+  title,
+  buletinId,
+}) {
+  try {
+    siteIds = normalizeSiteIds(siteIds);
+    if (!siteIds.length) return console.log("❌ No valid siteIds (buletin)");
+
+    const userIds = await getTargetUsers({ creatorRole, siteIds, creatorId });
+    if (!userIds.length) return console.log("❌ No target users (buletin)");
+
+    const message = buildBuletinMessage({ creatorRole, title });
+
+    await saveNotifications({
+      userIds,
+      title: message.title,
+      body: message.body,
+      data: { type: "buletin", buletin_id: buletinId },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (buletin)");
+
+    const tokenChunks = chunkArray(tokens, 500);
+    const invalidSet = new Set();
+
+    for (const chunk of tokenChunks) {
+      const resp = await admin.messaging().sendEachForMulticast({
+        tokens: chunk,
+        notification: { title: message.title, body: message.body },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "high_importance_channel",
+            sound: "default",
+          },
+        },
+        data: { type: "buletin", buletin_id: String(buletinId) },
+      });
+
+      resp.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = r.error?.code;
+          if (
+            code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token"
+          ) {
+            invalidSet.add(chunk[idx]);
+          }
+        }
+      });
+    }
+
+    await deleteInvalidTokens([...invalidSet]);
+  } catch (err) {
+    console.error("❌ ERROR SEND BULETIN NOTIFICATION:", err);
+  }
+}
 
 module.exports = {
   sendDailyPlanNotification,
-  getTargetUsers
+  sendBuletinNotification,
+  getTargetUsers,
 };

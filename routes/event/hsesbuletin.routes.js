@@ -1,3 +1,7 @@
+const {
+  sendBuletinNotification,
+} = require("../../services/notification.services");
+
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
@@ -22,22 +26,33 @@ router.post(
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
   async (req, res) => {
-    try 
-    {const { judul, subJudul, deskripsi, site_ids, is_for_all_sites } = req.body;
-    const isForAllSites = is_for_all_sites === '1' || is_for_all_sites === true;
+    try {
+      const { judul, subJudul, deskripsi, is_for_all_sites } = req.body;
+      const isForAllSites = is_for_all_sites === "1" || is_for_all_sites === true;
 
       // ======== Handle sites =========
-      let sites = site_ids;
-      if (!sites) sites = [];
-      else if (!Array.isArray(sites)) sites = [sites];
-      sites = sites.map(Number);
+      let sites = req.body.site_ids;
 
-      if (req.user.role === "admin") sites = [req.user.site_id];
+      if (typeof sites === "string") {
+        try { sites = JSON.parse(sites); }
+        catch { sites = [sites]; }
+      }
+
+      if (!Array.isArray(sites)) sites = sites ? [sites] : [];
+
+      sites = sites.map(Number).filter((id) => !isNaN(id));
+
+      if (req.user.role === "superadmin" && sites.length === 0 && !isForAllSites) {
+        return res.status(400).json({ message: "Minimal 1 site harus dipilih" });
+      }
+
+      if (req.user.role === "admin") {
+        sites = [req.user.site_id];
+      }
 
       const siteId = sites.length > 0 ? sites[0] : req.user.site_id;
       const departmentId = req.user.department_id ?? 1;
 
-      // ======== Insert ke hses_buletin =========
       const buletin = await pool.query(
         `
         INSERT INTO hses_buletin
@@ -65,13 +80,21 @@ router.post(
         );
       }
 
-        res.status(201).json({
+      await sendBuletinNotification({
+        creatorRole: req.user.role,
+        siteIds: sites,
+        creatorId: req.user.id,
+        title: judul,
+        buletinId,
+      });
+
+      return res.status(201).json({
         ...buletin.rows[0],
         is_for_all_sites: isForAllSites,
       });
     } catch (err) {
       console.error("CREATE BULETIN ERROR:", err);
-      res.status(500).json({ message: "Insert failed" });
+      return res.status(500).json({ message: "Insert failed" });
     }
   }
 );
