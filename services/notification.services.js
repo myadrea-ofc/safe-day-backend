@@ -177,6 +177,13 @@ async function sendDailyPlanNotification({
           title: message.title,
           body: message.body,
         },
+        android: {
+    priority: "high",
+    notification: {
+      channelId: "high_importance_channel",
+      sound: "default",
+    },
+  },
         data: {
           type: "daily_plan",
           daily_plan_id: String(planId),
