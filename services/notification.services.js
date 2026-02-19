@@ -46,6 +46,14 @@ function buildBuletinMessage({ creatorRole }) {
   };
 }
 
+function buildLpiMessage({ senderName }) {
+  return {
+    title: "🚨 LPI Baru Masuk",
+    body: `📌 ${senderName} mengirim LPI. Tap untuk cek detail.`,
+  };
+}
+
+
 /* ================== GET TARGET USERS ================== */
 async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
   const roles = resolveTargetRoles(creatorRole);
@@ -62,6 +70,25 @@ async function getTargetUsers({ creatorRole, siteIds, creatorId }) {
       AND u.id != $3
     `,
     [roles, siteIds, creatorId]
+  );
+
+  return result.rows.map((r) => r.id);
+}
+
+async function getTargetUsersForLpi({ siteId, creatorId }) {
+  const result = await pool.query(
+    `
+    SELECT u.id
+    FROM users u
+    JOIN roles r ON r.id = u.role_id
+    WHERE u.deleted_at IS NULL
+      AND u.id != $2
+      AND (
+        r.role_name = 'superadmin'
+        OR (r.role_name = 'admin' AND u.site_id = $1)
+      )
+    `,
+    [siteId, creatorId]
   );
 
   return result.rows.map((r) => r.id);
@@ -251,8 +278,73 @@ async function sendBuletinNotification({
   }
 }
 
+async function sendLpiNotification({ creatorId, siteId, senderName, lpiId }) {
+  try {
+    siteId = Number(siteId);
+    if (!siteId || Number.isNaN(siteId)) return console.log("❌ Invalid siteId (lpi)");
+    if (!lpiId) return console.log("❌ No lpiId (lpi)");
+
+    const userIdsRaw = await getTargetUsersForLpi({ siteId, creatorId });
+    const userIds = [...new Set(userIdsRaw)];
+    if (!userIds.length) return console.log("❌ No target users (lpi)");
+
+    const message = buildLpiMessage({ senderName: senderName || "User" });
+
+    await saveNotifications({
+      userIds,
+      title: message.title,
+      body: message.body,
+      data: { type: "lpi", lpi_id: lpiId, site_id: siteId },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (lpi)");
+
+    const tokenChunks = chunkArray(tokens, 500);
+    const invalidSet = new Set();
+
+    for (const chunk of tokenChunks) {
+      const resp = await admin.messaging().sendEachForMulticast({
+        tokens: chunk,
+        notification: { title: message.title, body: message.body },
+        android: {
+          priority: "high",
+          ttl: 24 * 60 * 60 * 1000,
+          notification: {
+            channelId: "high_importance_channel",
+            sound: "default",
+          },
+        },
+        data: {
+          type: "lpi",
+          lpi_id: String(lpiId),
+          site_id: String(siteId),
+        },
+      });
+
+      resp.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = r.error?.code;
+          if (
+            code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token"
+          ) {
+            invalidSet.add(chunk[idx]);
+          }
+        }
+      });
+    }
+
+    await deleteInvalidTokens([...invalidSet]);
+  } catch (err) {
+    console.error("❌ ERROR SEND LPI NOTIFICATION:", err);
+  }
+}
+
+
 module.exports = {
   sendDailyPlanNotification,
   sendBuletinNotification,
+  sendLpiNotification,
   getTargetUsers,
 };

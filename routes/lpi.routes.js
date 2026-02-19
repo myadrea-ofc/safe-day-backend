@@ -1,3 +1,5 @@
+const { sendLpiNotification } = require("../services/notification.services"); 
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
@@ -23,8 +25,7 @@ router.post(
   authMiddleware,
   upload.fields([
     { name: "file", maxCount: 1 },
-{ name: "foto", maxCount: 10 }, 
-
+    { name: "foto", maxCount: 10 },
   ]),
   async (req, res) => {
     try {
@@ -50,12 +51,9 @@ router.post(
       const site_id = req.user.site_id;
 
       const file_path = req.files?.file?.[0]?.filename || null;
-      const foto_paths = req.files?.foto
-  ? req.files.foto.map(f => f.filename)
-  : [];
+      const foto_paths = req.files?.foto ? req.files.foto.map((f) => f.filename) : [];
 
-
-      await pool.query(
+      const insertRes = await pool.query(
         `
         INSERT INTO lpi (
           nama, perusahaan, department, tanggal, waktu,
@@ -71,6 +69,7 @@ router.post(
           $13,$14,$15,
           $16,$17,$18,$19
         )
+        RETURNING id
         `,
         [
           nama,
@@ -88,17 +87,41 @@ router.post(
           department_saksi,
           klasifikasi_insiden,
           kronologi,
-          file_path,  
+          file_path,
           JSON.stringify(foto_paths),
           status_lokasi,
           site_id,
         ]
       );
 
-      res.status(200).json({ message: "LPI berhasil disimpan" });
+      const lpiId = insertRes.rows?.[0]?.id;
+
+      // notif tidak boleh menggagalkan submit
+      if (lpiId) {
+        try {
+          const senderName =
+            req.user.name || req.user.full_name || req.user.username || nama || "User";
+
+          await sendLpiNotification({
+            creatorId: req.user.id,
+            siteId: site_id,
+            senderName,
+            lpiId,
+          });
+        } catch (notifErr) {
+          console.error("⚠️ LPI notif error (ignored):", notifErr);
+        }
+      } else {
+        console.error("❌ LPI inserted but lpiId is null");
+      }
+
+      return res.status(200).json({
+        message: "LPI berhasil disimpan",
+        id: lpiId,
+      });
     } catch (err) {
       console.error("LPI POST ERROR:", err);
-      res.status(500).json({ message: "Server error" });
+      return res.status(500).json({ message: "Server error" });
     }
   }
 );
