@@ -41,15 +41,15 @@ function buildBuletinMessage({ creatorRole }) {
     title: "📰 Buletin Baru!",
     body:
       creatorRole === "superadmin"
-        ? "📢 HO upload Buletin baru. Yuk dibaca!"
-        : "📢 HSES upload Buletin baru. Yuk dibaca!",
+        ? "📢 HO upload Buletin baru. Yuk, lihat dan kasih rating dulu ya! ⭐"
+        : "📢 HSES upload Buletin baru. Yuk, lihat dan kasih rating dulu ya! ⭐",
   };
 }
 
 function buildLpiMessage({ senderName }) {
   return {
-    title: "🚨 LPI Baru Masuk",
-    body: `📌 ${senderName} mengirim LPI. Tap untuk cek detail.`,
+    title: "🚨 PERHATIAN LPI ACCIDENT",
+    body: `📌 ${senderName} mengirim LPI. Tap untuk cek detaiL 🚨`,
   };
 }
 
