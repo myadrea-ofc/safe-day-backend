@@ -164,7 +164,6 @@ router.get("/", authMiddleware, async (req, res) => {
       params.push(site_id);
     }
 
-    // SUPERADMIN → NO FILTER
 
     query += " ORDER BY created_at DESC";
 
