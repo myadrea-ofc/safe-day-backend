@@ -264,11 +264,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
-
-
-
-
 app.post("/logout", authMiddleware, async (req, res) => {
   try {
     const token = req.token; 
@@ -296,7 +291,6 @@ WHERE token = $1
     return res.status(500).json({ message: "Logout gagal" });
   }
 });
-
 
 app.get("/sites", async (req, res) => {
   try {
@@ -345,9 +339,6 @@ app.get("/validate-session", authMiddleware, async (req, res) => {
     user: req.user
   });
 });
-
-
-
 
 setInterval(async () => {
   try {

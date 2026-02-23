@@ -48,8 +48,8 @@ function buildBuletinMessage({ creatorRole }) {
 
 function buildLpiMessage({ senderName }) {
   return {
-    title: "🚨 PERHATIAN LPI ACCIDENT",
-    body: `📌 ${senderName} mengirim LPI. Tap untuk cek detaiL 🚨`,
+    title: "⚠️ PERHATIAN LPI ACCIDENT",
+    body: `🚨 ${senderName} mengirim LPI. Tap untuk cek detaiL 📍`,
   };
 }
 
@@ -341,10 +341,83 @@ async function sendLpiNotification({ creatorId, siteId, senderName, lpiId }) {
   }
 }
 
+/* ================== SEND ROLE CHANGED ================== */
+async function sendRoleChangedNotification({ userId, newRoleName }) {
+  try {
+    userId = Number(userId);
+    if (!userId || Number.isNaN(userId)) return console.log("❌ Invalid userId (role_changed)");
+
+    // Ambil semua token user tsb (multi device)
+    const tokensRes = await pool.query(
+      `
+      SELECT DISTINCT fcm_token
+      FROM user_devices
+      WHERE user_id = $1
+        AND fcm_token IS NOT NULL
+        AND fcm_token <> ''
+      `,
+      [userId]
+    );
+
+    const tokens = (tokensRes.rows || []).map((r) => r.fcm_token).filter(Boolean);
+    if (!tokens.length) return console.log("❌ No tokens (role_changed)");
+
+    const title = "🔐 Role Diperbarui";
+    const body = `🔄 Sekarang kamu adalah ${newRoleName}. Silahkan login ulang ya. ✨`;
+
+    await saveNotifications({
+      userIds: [userId],
+      title,
+      body,
+      data: { type: "role_changed" },
+    });
+
+    const tokenChunks = chunkArray(tokens, 500);
+    const invalidSet = new Set();
+
+    for (const chunk of tokenChunks) {
+      const resp = await admin.messaging().sendEachForMulticast({
+        tokens: chunk,
+        notification: { title, body },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "high_importance_channel",
+            sound: "default",
+          },
+        },
+        data: {
+          type: "role_changed",
+          reason: "role_changed",
+        },
+      });
+
+      resp.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = r.error?.code;
+          if (
+            code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token"
+          ) {
+            invalidSet.add(chunk[idx]);
+          }
+        }
+      });
+    }
+
+    await deleteInvalidTokens([...invalidSet]);
+
+    console.log("✅ ROLE CHANGED notif sent to user:", userId);
+  } catch (err) {
+    console.error("❌ ERROR SEND ROLE CHANGED NOTIFICATION:", err);
+  }
+}
+
 
 module.exports = {
   sendDailyPlanNotification,
   sendBuletinNotification,
   sendLpiNotification,
+  sendRoleChangedNotification,
   getTargetUsers,
 };

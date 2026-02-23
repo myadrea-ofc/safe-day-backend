@@ -1,4 +1,6 @@
-
+const {
+  sendRoleChangedNotification,
+} = require("../path/to/your/notification/module"); 
 const express = require("express");
 const router = express.Router();
 
@@ -146,19 +148,27 @@ router.put(
         return res.status(403).json({ message: "Tidak punya akses" });
       }
 
-      await pool.query(
-        `
-        UPDATE user_sessions
-        SET is_active = false,
-            logout_at = NOW(),
-            logout_reason = 'role_changed'
-        WHERE user_id = $1
-          AND is_active = true
-        `,
-        [req.params.id]
-      );
+   await pool.query(
+  `
+  UPDATE user_sessions
+  SET is_active = false,
+      logout_at = NOW(),
+      logout_reason = 'role_changed'
+  WHERE user_id = $1
+    AND is_active = true
+  `,
+  [req.params.id]
+);
 
-      res.json({ success: true });
+//  Kirim notif 
+const newRoleName = role;
+await sendRoleChangedNotification({
+  userId: req.params.id,
+  newRoleName,
+});
+
+//  respon
+return res.json({ success: true });
 
     } catch (err) {
       console.error(err);
