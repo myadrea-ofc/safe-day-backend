@@ -1,6 +1,6 @@
 const {
   sendRoleChangedNotification,
-} = require("../path/to/your/notification/module"); 
+} = require("../services/notification.services"); 
 const express = require("express");
 const router = express.Router();
 
