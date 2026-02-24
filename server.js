@@ -22,6 +22,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 menit
+  max: 20,             // 20 request per IP per menit
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Terlalu banyak request. Coba lagi sebentar." }
+});
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Ping endpoint untuk health check
@@ -119,16 +127,7 @@ app.use("/p2h_fuel_truck", p2hfueltruck);
 app.use("/hses_daily_plan", dailyPlanRoutes);
 app.use("/hses_buletin", buletinRoutes);
 
-app.use("/notifications", notificationRoutes)
-
-const forgotLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 menit
-  max: 20,             // 20 request per IP per menit
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Terlalu banyak request. Coba lagi sebentar." }
-});
-
+app.use("/notifications", notificationRoutes);
 
 
 app.post("/login", async (req, res) => {
