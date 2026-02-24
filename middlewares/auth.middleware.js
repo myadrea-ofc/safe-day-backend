@@ -95,15 +95,17 @@ module.exports = async (req, res, next) => {
     const userQuery = await pool.query(
       `
       SELECT
-        u.id,
-        u.role_id,
-        u.site_id,
-        u.department_id,
-        r.role_name
-      FROM users u
-      JOIN roles r ON r.id = u.role_id
-      WHERE u.id = $1
-        AND u.deleted_at IS NULL
+  u.id,
+  u.name,
+  u.role_id,
+  u.site_id,
+  u.department_id,
+  u.must_change_password,
+  r.role_name
+FROM users u
+JOIN roles r ON r.id = u.role_id
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
       `,
       [decoded.id]
     );
@@ -137,11 +139,13 @@ module.exports = async (req, res, next) => {
 
     // PASS KE REQUEST
     req.user = {
-      id: userQuery.rows[0].id,
-      site_id: userQuery.rows[0].site_id,
-      department_id: userQuery.rows[0].department_id,
-      role: userQuery.rows[0].role_name.toLowerCase(),
-    };
+  id: userQuery.rows[0].id,
+  name: userQuery.rows[0].name,
+  site_id: userQuery.rows[0].site_id,
+  department_id: userQuery.rows[0].department_id,
+  role: userQuery.rows[0].role_name.toLowerCase(),
+  must_change_password: userQuery.rows[0].must_change_password === true,
+};
 
     next();
 

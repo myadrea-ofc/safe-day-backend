@@ -1,12 +1,11 @@
 require("dotenv").config();
 const pool = require("./config/db");
 
-const authMiddleware = require("./middlewares/auth.middleware");
-const allowRoles = require("./middlewares/role.middleware");
+const rateLimit = require("express-rate-limit");
+const forgotPasswordRoutes = require("./routes/forgotpassword.routes");
+const mustChangePasswordGuard = require("./middlewares/mustChangePassword.middleware");
 
-const siteDepartmentMiddleware = require(
-  "./middlewares/siteDepartmentMiddleware"
-);
+const authMiddleware = require("./middlewares/auth.middleware");
 
 const express = require("express");
 const cors = require("cors");
@@ -39,6 +38,8 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage: storage });
+
+
 
 const eventRoutes = require("./routes/event.routes");
 const userRoutes = require("./routes/user.routes");
@@ -78,10 +79,13 @@ const authRoutes = require("./routes/auth.routes");
 
 const notificationRoutes = require("./routes/notification.routes")
 
+
+
 app.use("/auth", authRoutes);
 
 app.use("/api/events", eventRoutes);
-app.use("/users", userRoutes);
+app.use("/forgot-password", forgotLimiter, forgotPasswordRoutes);
+app.use("/users", authMiddleware, mustChangePasswordGuard, userRoutes);
 
 app.use("/lpi", lpiRoutes);
 app.use("/hazard", hazardRoutes);
@@ -117,6 +121,15 @@ app.use("/hses_buletin", buletinRoutes);
 
 app.use("/notifications", notificationRoutes)
 
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 menit
+  max: 20,             // 20 request per IP per menit
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Terlalu banyak request. Coba lagi sebentar." }
+});
+
+
 
 app.post("/login", async (req, res) => {
   const client = await pool.connect();
@@ -131,8 +144,9 @@ app.post("/login", async (req, res) => {
     const result = await client.query(
       `
       SELECT u.id, u.name, u.password,
-             u.role_id, r.role_name,
-             u.site_id, u.department_id
+       u.role_id, r.role_name,
+       u.site_id, u.department_id,
+       u.must_change_password
       FROM users u
       JOIN roles r ON r.id = u.role_id
       WHERE trim(upper(u.name)) = trim(upper($1))
@@ -254,6 +268,7 @@ app.post("/login", async (req, res) => {
         role: user.role_name,
         site_id: user.site_id,
         department_id: user.department_id,
+        must_change_password: user.must_change_password,
       },
     });
   } catch (err) {
@@ -367,7 +382,6 @@ setInterval(async () => {
     console.error("Auto logout error:", err);
   }
 }, 1000 * 60 * 5);
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

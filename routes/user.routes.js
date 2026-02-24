@@ -14,13 +14,12 @@ const userController = require("../controllers/user.controller");
 
 router.put(
   "/change-password",
-  authMiddleware,
+  
   userController.changePassword
 );
 
 router.post(
   "/",
-  authMiddleware,
   allowRoles("admin", "superadmin"),
   async (req, res) => {
     try {
@@ -88,7 +87,7 @@ router.post(
 
 router.put(
   "/:id/role",
-  authMiddleware,
+  
   allowRoles("admin", "superadmin"),
   async (req, res) => {
     try {
@@ -180,13 +179,11 @@ return res.json({ success: true });
 
 router.get(
   "/profile",
-  authMiddleware,
   userController.getProfile
 );
 
 router.get(
   "/",
-  authMiddleware,
   allowRoles("admin", "superadmin"),
   async (req, res) => {
     try {
@@ -246,7 +243,7 @@ router.get(
 );
 
 
-router.post("/fcm-token", authMiddleware, async (req, res) => {
+router.post("/fcm-token", async (req, res) => {
   const { fcm_token } = req.body;
   const deviceId = req.headers["x-device-id"];
 

@@ -9,8 +9,11 @@ exports.changePassword = async (req, res) => {
     return res.status(400).json({ message: "Data tidak lengkap" });
   }
 
+  if (String(newPassword).length < 8) {
+    return res.status(400).json({ message: "Password minimal 8 karakter" });
+  }
+
   try {
-    // 1️⃣ ambil password lama
     const userResult = await pool.query(
       "SELECT password FROM users WHERE id = $1 AND deleted_at IS NULL",
       [userId]
@@ -20,26 +23,34 @@ exports.changePassword = async (req, res) => {
       return res.status(404).json({ message: "User tidak ditemukan" });
     }
 
-    // 2️⃣ compare password lama
-    const valid = await bcrypt.compare(
-      oldPassword,
-      userResult.rows[0].password
-    );
+    const oldHash = userResult.rows[0].password;
 
-    if (!valid) {
+    const validOld = await bcrypt.compare(oldPassword, oldHash);
+    if (!validOld) {
       return res.status(400).json({ message: "Password lama salah" });
     }
 
-    // 3️⃣ hash password baru
+    const sameAsOld = await bcrypt.compare(newPassword, oldHash);
+    if (sameAsOld) {
+      return res.status(400).json({
+        message: "Password baru tidak boleh sama dengan password lama",
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // 4️⃣ update password
     await pool.query(
-      "UPDATE users SET password = $1 WHERE id = $2",
+      `
+      UPDATE users
+      SET password = $1,
+          must_change_password = false,
+          updated_at = NOW()
+      WHERE id = $2
+        AND deleted_at IS NULL
+      `,
       [hashedPassword, userId]
     );
 
-    // 5️⃣ response → Flutter logout
     return res.json({
       success: true,
       message: "Password berhasil diganti, silakan login ulang",
@@ -50,13 +61,11 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-
-
 exports.createUser = async (req, res) => {
   try {
-    const { name, password, role, site_id, department_id } = req.body;
+    const { name, password, role, site_id, department_id, email } = req.body;
 
-    if (!name || !password || !role || !department_id) {
+    if (!name || !password || !role || !department_id || email) {
       return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
@@ -114,9 +123,9 @@ exports.createUser = async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO users
-        (name, password, role_id, site_id, department_id, created_by)
+        (name, password, role_id, site_id, department_id, created_by, email)
       VALUES
-        ($1,$2,$3,$4,$5,$6)
+        ($1,$2,$3,$4,$5,$6,$7)
       RETURNING id, name
       `,
       [
