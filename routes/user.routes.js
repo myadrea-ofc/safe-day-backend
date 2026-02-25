@@ -14,75 +14,13 @@ const userController = require("../controllers/user.controller");
 
 router.put(
   "/change-password",
-  
   userController.changePassword
 );
 
 router.post(
   "/",
   allowRoles("admin", "superadmin"),
-  async (req, res) => {
-    try {
-      const { name, password, role, site_id, department_id } = req.body;
-
-      if (!name || !password || !role || !department_id) {
-        return res.status(400).json({ message: "Data tidak lengkap" });
-      }
-
-      const roleResult = await pool.query(
-        `SELECT id FROM roles WHERE role_name = $1`,
-        [role]
-      );
-
-      if (roleResult.rowCount === 0) {
-        return res.status(400).json({ message: "Role tidak valid" });
-      }
-
-      const roleId = roleResult.rows[0].id;
-
-      // 🔒 SITE RULE
-      let finalSiteId;
-
-      if (req.user.role === "superadmin") {
-        if (!site_id) {
-          return res.status(400).json({ message: "Site wajib diisi" });
-        }
-        finalSiteId = site_id;
-      } else {
-        // ADMIN → PAKSA SITE SENDIRI
-        finalSiteId = req.user.site_id;
-      }
-
-      // 🔐 HASH PASSWORD
-      const hashed = await bcrypt.hash(password, 10);
-
-      const result = await pool.query(
-        `
-        INSERT INTO users
-          (name, password, role_id, site_id, department_id, created_by)
-        VALUES
-          ($1,$2,$3,$4,$5,$6)
-        RETURNING id, name, site_id, department_id
-        `,
-        [
-          name,
-          hashed,
-          roleId,
-          finalSiteId,
-          department_id,
-          req.user.id,
-        ]
-      );
-
-      res.status(201).json({
-        success: true,
-        data: result.rows[0],
-      });
-    } catch (err) {
-      console.error("ADD USER ERROR:", err);
-      res.status(500).json({ message: "Gagal menambahkan user" });
-    }
-  }
+  userController.createUser
 );
 
 router.put(

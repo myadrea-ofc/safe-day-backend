@@ -75,11 +75,12 @@ exports.createUser = async (req, res) => {
   try {
     const { name, password, role, site_id, department_id, email } = req.body;
 
-    if (!name || !password || !role || !department_id || email) {
+    if (!name || !password || !role || !department_id || !email) {
       return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
-    // 🔐 ROLE PERMISSION
+    const emailNormalized = String(email).trim().toLowerCase();
+
     const allowedRoles = {
       superadmin: ["superadmin", "admin", "member"],
       admin: ["admin", "member"],
@@ -91,7 +92,6 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // 🔒 SITE RULE
     const finalSiteId =
       req.user.role === "superadmin" ? site_id : req.user.site_id;
 
@@ -99,7 +99,6 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ message: "Site wajib diisi" });
     }
 
-    // ❗ ADMIN hanya boleh buat ADMIN di site sendiri
     if (
       req.user.role === "admin" &&
       role === "admin" &&
@@ -110,7 +109,6 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // ROLE ID
     const roleRes = await pool.query(
       "SELECT id FROM roles WHERE role_name=$1",
       [role]
@@ -119,7 +117,6 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ message: "Role tidak valid" });
     }
 
-    // DEPARTMENT CHECK
     const deptCheck = await pool.query(
       "SELECT 1 FROM departments WHERE id=$1 AND site_id=$2",
       [department_id, finalSiteId]
@@ -136,7 +133,7 @@ exports.createUser = async (req, res) => {
         (name, password, role_id, site_id, department_id, created_by, email)
       VALUES
         ($1,$2,$3,$4,$5,$6,$7)
-      RETURNING id, name
+      RETURNING id, name, email
       `,
       [
         name,
@@ -145,12 +142,18 @@ exports.createUser = async (req, res) => {
         finalSiteId,
         department_id,
         req.user.id,
+        emailNormalized,
       ]
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     console.error("CREATE USER ERROR:", err);
+
+    if (err.code === "23505") {
+      return res.status(409).json({ message: "Email sudah digunakan" });
+    }
+
     res.status(500).json({ message: "Gagal menambahkan user" });
   }
 };
