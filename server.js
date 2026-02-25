@@ -6,7 +6,7 @@ const forgotPasswordRoutes = require("./routes/forgotpassword.routes");
 const mustChangePasswordGuard = require("./middlewares/mustChangePassword.middleware");
 
 const authMiddleware = require("./middlewares/auth.middleware");
-const { sendLoginOtpEmail } = require("../backend/config/mailer");
+const { sendLoginOtpEmail } = require("./config/mailer");
 
 const express = require("express");
 const cors = require("cors");
@@ -328,7 +328,8 @@ app.post("/login-force/request-otp", async (req, res) => {
         AND is_active = true
         AND expired_at > NOW()
         AND device_id <> $2
-        AND (last_seen IS NULL OR last_seen > NOW() - INTERVAL '15 minutes')
+        AND (last_seen IS NULL OR last_seen > NOW() - INTERVAL '2 minutes')
+        LIMIT 1
       `,
       [user.id, device_id]
     );
