@@ -134,7 +134,7 @@ app.use("/notifications", notificationRoutes);
 app.post("/login", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id, fcm_token, force } = req.body;
+    const { name, password, site_id, department_id, device_id, fcm_token} = req.body;
 
     if (!name || !password || !site_id || !department_id || !device_id) {
       return res.status(400).json({ message: "Data login tidak lengkap" });
@@ -169,8 +169,6 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Password salah" });
     }
 
-   const forceLogin =
-  force === true || force === "true" || force === 1 || force === "1";
 
 /* ================= CEK DEVICE LAIN (STILL ACTIVE & FRESH) ================= */
 const activeSession = await client.query(
@@ -181,17 +179,17 @@ const activeSession = await client.query(
     AND is_active = true
     AND expired_at > NOW()
     AND device_id <> $2
-    AND (last_seen IS NULL OR last_seen > NOW() - INTERVAL '15 minutes')
+    AND last_seen > NOW() - INTERVAL '2 minutes'
+    LIMIT 1
   `,
   [user.id, device_id]
 );
 
-if (activeSession.rowCount > 0 && !forceLogin) {
+if (activeSession.rowCount > 0) {
   return res.status(409).json({
-  message: "Akun ini sedang login di device lain",
-  requires_force: true,
-  otp_required: true
-});
+    message: "Akun ini sedang login di device lain",
+    otp_required: true
+  });
 }
 
     /* ================= MATIKAN SESSION LAMA ================= */
@@ -553,6 +551,34 @@ app.post("/login-force/confirm", async (req, res) => {
     client.release();
   }
 });
+
+setInterval(async () => {
+  try {
+    // TOKEN EXPIRED
+    await pool.query(`
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          logout_reason = 'token_expired'
+      WHERE is_active = true
+        AND expired_at < NOW()
+    `);
+
+    // INACTIVE USER
+    await pool.query(`
+      UPDATE user_sessions
+      SET is_active = false,
+          logout_at = NOW(),
+          logout_reason = 'inactive'
+      WHERE is_active = true
+        AND last_seen < NOW() - INTERVAL '3 days'
+    `);
+
+    console.log("🛑 Auto logout berjalan normal");
+  } catch (err) {
+    console.error("Auto logout error:", err);
+  }
+}, 1000 * 60 * 5);
 
 app.post("/logout", authMiddleware, async (req, res) => {
   try {

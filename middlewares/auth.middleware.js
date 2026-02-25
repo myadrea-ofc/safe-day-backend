@@ -85,7 +85,7 @@ module.exports = async (req, res, next) => {
         AND is_active = true
         AND (
           last_seen IS NULL
-          OR last_seen < NOW() - INTERVAL '5 minutes'
+          OR last_seen < NOW() - INTERVAL '50 seconds'
         )
       `,
       [decoded.id, token, deviceId]
