@@ -40,21 +40,31 @@ exports.changePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await pool.query(
-      `
-      UPDATE users
-      SET password = $1,
-          must_change_password = false,
-          updated_at = NOW()
-      WHERE id = $2
-        AND deleted_at IS NULL
-      `,
-      [hashedPassword, userId]
-    );
+  `
+  UPDATE users
+  SET password = $1,
+      must_change_password = false,
+      updated_at = NOW()
+  WHERE id = $2
+    AND deleted_at IS NULL
+  `,
+  [hashedPassword, userId]
+);
 
-    return res.json({
-      success: true,
-      message: "Password berhasil diganti, silakan login ulang",
-    });
+// ✅ MATIKAN SESSION
+await pool.query(`
+  UPDATE user_sessions
+  SET is_active = false,
+      logout_at = NOW(),
+      logout_reason = 'password_changed'
+  WHERE user_id = $1
+    AND is_active = true
+`, [userId]);
+
+return res.json({
+  success: true,
+  message: "Password berhasil diganti, silakan login ulang",
+});
   } catch (err) {
     console.error("CHANGE PASSWORD ERROR:", err);
     return res.status(500).json({ message: "Server error" });
