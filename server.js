@@ -6,6 +6,7 @@ const forgotPasswordRoutes = require("./routes/forgotpassword.routes");
 const mustChangePasswordGuard = require("./middlewares/mustChangePassword.middleware");
 
 const authMiddleware = require("./middlewares/auth.middleware");
+const { sendLoginOtpEmail } = require("../backend/config/mailer");
 
 const express = require("express");
 const cors = require("cors");
@@ -133,7 +134,7 @@ app.use("/notifications", notificationRoutes);
 app.post("/login", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id, fcm_token } = req.body;
+    const { name, password, site_id, department_id, device_id, fcm_token, force } = req.body;
 
     if (!name || !password || !site_id || !department_id || !device_id) {
       return res.status(400).json({ message: "Data login tidak lengkap" });
@@ -168,22 +169,30 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Password salah" });
     }
 
-    /* ================= CEK DEVICE LAIN ================= */
-    const activeSession = await client.query(
-      `
-      SELECT id
-      FROM user_sessions
-      WHERE user_id = $1
-        AND is_active = true
-        AND expired_at > NOW()
-        AND device_id <> $2
-      `,
-      [user.id, device_id]
-    );
+   const forceLogin =
+  force === true || force === "true" || force === 1 || force === "1";
 
-    if (activeSession.rowCount > 0) {
-      return res.status(409).json({ message: "Akun ini sedang login di device lain" });
-    }
+/* ================= CEK DEVICE LAIN (STILL ACTIVE & FRESH) ================= */
+const activeSession = await client.query(
+  `
+  SELECT id
+  FROM user_sessions
+  WHERE user_id = $1
+    AND is_active = true
+    AND expired_at > NOW()
+    AND device_id <> $2
+    AND (last_seen IS NULL OR last_seen > NOW() - INTERVAL '15 minutes')
+  `,
+  [user.id, device_id]
+);
+
+if (activeSession.rowCount > 0 && !forceLogin) {
+  return res.status(409).json({
+  message: "Akun ini sedang login di device lain",
+  requires_force: true,
+  otp_required: true
+});
+}
 
     /* ================= MATIKAN SESSION LAMA ================= */
     await client.query(
@@ -273,6 +282,273 @@ app.post("/login", async (req, res) => {
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Login gagal" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/login-force/request-otp", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { name, password, site_id, department_id, device_id } = req.body;
+
+    if (!name || !password || !site_id || !department_id || !device_id) {
+      return res.status(400).json({ message: "Data tidak lengkap" });
+    }
+
+    const userRes = await client.query(
+      `
+      SELECT u.id, u.name, u.password, u.email
+      FROM users u
+      WHERE trim(upper(u.name)) = trim(upper($1))
+        AND u.site_id = $2
+        AND u.department_id = $3
+        AND u.deleted_at IS NULL
+      `,
+      [name, site_id, department_id]
+    );
+
+    if (userRes.rowCount === 0) {
+      return res.status(401).json({ message: "User / site / department tidak cocok" });
+    }
+
+    const user = userRes.rows[0];
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ message: "Password salah" });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ message: "Email belum terdaftar. Hubungi admin." });
+    }
+
+    // Pastikan konflik masih "fresh" (sesuai policy kamu)
+    const activeSession = await client.query(
+      `
+      SELECT id
+      FROM user_sessions
+      WHERE user_id = $1
+        AND is_active = true
+        AND expired_at > NOW()
+        AND device_id <> $2
+        AND (last_seen IS NULL OR last_seen > NOW() - INTERVAL '15 minutes')
+      `,
+      [user.id, device_id]
+    );
+
+    if (activeSession.rowCount === 0) {
+      return res.status(400).json({ message: "Tidak ada konflik session" });
+    }
+
+    // Rate limit resend: minimal 60 detik sekali (opsional tapi recommended)
+    const recentOtp = await client.query(
+      `
+      SELECT id
+      FROM login_takeover_otps
+      WHERE user_id = $1
+        AND device_id = $2
+        AND used_at IS NULL
+        AND created_at > NOW() - INTERVAL '60 seconds'
+      LIMIT 1
+      `,
+      [user.id, device_id]
+    );
+
+    if (recentOtp.rowCount > 0) {
+      return res.status(429).json({ message: "OTP baru saja dikirim. Coba lagi sebentar." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit
+    const otpHash = bcrypt.hashSync(otp, 10);
+
+    // invalidate OTP lama untuk user+device ini
+    await client.query(
+      `
+      UPDATE login_takeover_otps
+      SET used_at = NOW()
+      WHERE user_id = $1 AND device_id = $2 AND used_at IS NULL
+      `,
+      [user.id, device_id]
+    );
+
+    await client.query(
+      `
+      INSERT INTO login_takeover_otps (user_id, device_id, otp_hash, expires_at)
+      VALUES ($1, $2, $3, NOW() + INTERVAL '5 minutes')
+      `,
+      [user.id, device_id, otpHash]
+    );
+
+    await sendLoginOtpEmail({
+      to: user.email,
+      name: user.name,
+      otp,
+      minutes: 5,
+    });
+
+    return res.json({ message: "OTP terkirim ke email terdaftar" });
+  } catch (err) {
+    console.error("request-otp error:", err);
+    return res.status(500).json({ message: "Gagal mengirim OTP" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/login-force/confirm", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { name, password, site_id, department_id, device_id, otp, fcm_token } = req.body;
+
+    if (!name || !password || !site_id || !department_id || !device_id || !otp) {
+      return res.status(400).json({ message: "Data tidak lengkap" });
+    }
+
+    const result = await client.query(
+      `
+      SELECT u.id, u.name, u.password,
+             u.role_id, r.role_name,
+             u.site_id, u.department_id,
+             u.must_change_password,
+             u.email
+      FROM users u
+      JOIN roles r ON r.id = u.role_id
+      WHERE trim(upper(u.name)) = trim(upper($1))
+        AND u.site_id = $2
+        AND u.department_id = $3
+        AND u.deleted_at IS NULL
+      `,
+      [name, site_id, department_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({ message: "User / site / department tidak cocok" });
+    }
+
+    const user = result.rows[0];
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ message: "Password salah" });
+    }
+
+    // Ambil OTP aktif terbaru
+    const otpRes = await client.query(
+      `
+      SELECT id, otp_hash, attempts
+      FROM login_takeover_otps
+      WHERE user_id = $1
+        AND device_id = $2
+        AND used_at IS NULL
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [user.id, device_id]
+    );
+
+    if (otpRes.rowCount === 0) {
+      return res.status(400).json({ message: "OTP tidak ditemukan / sudah kadaluarsa" });
+    }
+
+    const row = otpRes.rows[0];
+
+    if (row.attempts >= 5) {
+      return res.status(429).json({ message: "Terlalu banyak percobaan OTP" });
+    }
+
+    const ok = bcrypt.compareSync(String(otp), row.otp_hash);
+
+    await client.query(`UPDATE login_takeover_otps SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
+
+    if (!ok) {
+      return res.status(400).json({ message: "OTP salah" });
+    }
+
+    await client.query(`UPDATE login_takeover_otps SET used_at = NOW() WHERE id = $1`, [row.id]);
+
+    // Matikan session lama (force takeover)
+    await client.query(
+      `
+      UPDATE user_sessions
+      SET is_active = false,
+          expired_at = NOW(),
+          logout_at = NOW(),
+          logout_reason = 'force_relogin'
+      WHERE user_id = $1
+        AND is_active = true
+      `,
+      [user.id]
+    );
+
+    // Generate token (sama seperti login)
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role_id: user.role_id,
+        role: user.role_name,
+        site_id: user.site_id,
+        department_id: user.department_id,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "3d" }
+    );
+
+    // Insert session baru
+    await client.query(
+      `
+      INSERT INTO user_sessions
+      (user_id, token, device_id, is_active, expired_at, last_seen)
+      VALUES ($1, $2, $3, true, NOW() + INTERVAL '3 days', NOW())
+      `,
+      [user.id, token, device_id]
+    );
+
+    // (opsional) simpan device+fcm sama seperti di /login kamu
+    // Kalau mau konsisten, copy blok simpan FCM dari /login ke sini juga.
+    // Aku taruh versi ringkas yang sama patternnya:
+    const cleanToken = (fcm_token ?? "").toString().trim();
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
+      try {
+        await client.query(
+          `
+          DELETE FROM user_devices
+          WHERE fcm_token = $1
+            AND user_id <> $2
+          `,
+          [cleanToken, user.id]
+        );
+
+        await client.query(
+          `
+          INSERT INTO user_devices (user_id, device_id, fcm_token, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (user_id, device_id)
+          DO UPDATE SET
+            fcm_token = EXCLUDED.fcm_token,
+            updated_at = NOW()
+          `,
+          [user.id, device_id, cleanToken]
+        );
+
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK");
+      }
+    }
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role_name,
+        site_id: user.site_id,
+        department_id: user.department_id,
+        must_change_password: user.must_change_password,
+      },
+    });
+  } catch (err) {
+    console.error("confirm takeover error:", err);
+    return res.status(500).json({ message: "Gagal verifikasi OTP" });
   } finally {
     client.release();
   }

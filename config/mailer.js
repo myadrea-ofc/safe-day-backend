@@ -131,4 +131,90 @@ async function sendNewPasswordEmail({ to, name, siteName, departmentName, newPas
   });
 }
 
-module.exports = { sendNewPasswordEmail };
+async function sendLoginOtpEmail({ to, name, otp, minutes = 5 }) {
+  const subject = "SAFE DAY - Kode OTP Login";
+
+  const text =
+    `Halo ${name},\n\n` +
+    `Kami menerima permintaan verifikasi untuk login dari perangkat lain.\n\n` +
+    `Kode OTP Anda: ${otp}\n` +
+    `Berlaku selama ${minutes} menit.\n\n` +
+    `Jika ini bukan Anda, abaikan email ini dan segera hubungi Head Office.\n`;
+
+  const html = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>${subject}</title>
+    </head>
+    <body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f7;padding:24px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+              <tr>
+                <td style="padding:22px 24px;background:linear-gradient(135deg,#1d63ff,#4fa9ff);">
+                  <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:.5px;">SAFE DAY</div>
+                  <div style="font-size:13px;color:rgba(255,255,255,.85);margin-top:6px;">HSES Management System</div>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:22px 24px;">
+                  <div style="font-size:16px;font-weight:800;margin-bottom:8px;">Kode OTP Login</div>
+
+                  <div style="font-size:14px;line-height:1.6;color:#374151;">
+                    Halo <b>${escapeHtml(name)}</b>,<br/>
+                    Kami menerima permintaan verifikasi untuk login dari <b>perangkat lain</b>.
+                    Gunakan kode OTP berikut untuk melanjutkan:
+                  </div>
+
+                  <div style="margin-top:16px;">
+                    <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">Kode OTP</div>
+                    <div style="font-family:Consolas, 'Courier New', monospace;font-size:22px;font-weight:900;letter-spacing:6px;padding:14px 16px;border-radius:14px;background:#111827;color:#ffffff;display:inline-block;">
+                      ${escapeHtml(otp)}
+                    </div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:8px;">
+                      Berlaku selama <b>${escapeHtml(minutes)}</b> menit.
+                    </div>
+                  </div>
+
+                  <div style="margin-top:18px;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:14px 14px;">
+                    <div style="font-size:13px;font-weight:800;color:#9a3412;margin-bottom:6px;">Penting</div>
+                    <div style="font-size:13px;line-height:1.6;color:#9a3412;">
+                      Jangan bagikan kode OTP ini kepada siapa pun. Jika Anda tidak merasa melakukan permintaan ini,
+                      abaikan email ini dan segera hubungi <b>Head Office</b>.
+                    </div>
+                  </div>
+
+                  <div style="height:1px;background:#e5e7eb;margin:18px 0;"></div>
+                  <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
+                    Email ini dikirim otomatis oleh sistem SAFE DAY. Mohon jangan membalas email ini.
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:16px 24px;background:#f6f8fb;">
+                  <div style="font-size:12px;color:#6b7280;">© ${new Date().getFullYear()} SAFE DAY • Bagas Bumi Persada</div>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>`;
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    text,
+    html,
+  });
+}
+
+module.exports = { sendNewPasswordEmail, sendLoginOtpEmail };
