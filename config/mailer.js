@@ -35,7 +35,7 @@ async function sendNewPasswordEmail({ to, name, siteName, departmentName, newPas
 
   const text =
     `Halo ${name},\n\n` +
-    `Permintaan reset password Anda berhasil diproses.\n` +
+    `Permintaan reset password Anda berhasil.\n` +
     `Site: ${siteName}\n` +
     `Department: ${departmentName}\n\n` +
     `Password baru Anda: ${newPassword}\n\n` +
