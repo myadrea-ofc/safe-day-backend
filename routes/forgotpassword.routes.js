@@ -42,7 +42,7 @@ router.post("/", async (req, res) => {
       WHERE u.site_id = $1
         AND u.department_id = $2
         AND trim(upper(u.name)) = trim(upper($3))
-        AND lower(u.email) = lower($4)
+        AND lower(u.email) = lower(trim($4))
         AND u.deleted_at IS NULL
       LIMIT 1
       `,
@@ -50,9 +50,10 @@ router.post("/", async (req, res) => {
     );
 
     if (userRes.rowCount === 0) {
-      // keamanan: jangan bocorkan user ada atau tidak
-      return res.status(200).json({ message: "Jika data valid, email akan dikirim" });
-    }
+  return res.status(400).json({
+    message: "Data tidak valid. Mohon cek Site, Department, Nama, dan Email."
+  });
+}
 
     const user = userRes.rows[0];
 
