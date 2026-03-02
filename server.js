@@ -465,6 +465,7 @@ app.post("/login/set-email", async (req, res) => {
         department_id: user.department_id,
         must_change_password: user.must_change_password,
         email: user.email || cleanEmail,
+        employee_id: user.employee_id,
       },
     });
   } catch (err) {
