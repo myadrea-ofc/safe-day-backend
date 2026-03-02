@@ -146,7 +146,7 @@ app.post("/login", async (req, res) => {
       SELECT u.id, u.name, u.password,
        u.role_id, r.role_name,
        u.site_id, u.department_id,
-       u.must_change_password
+       u.must_change_password, u.email, u.employee_id
       FROM users u
       JOIN roles r ON r.id = u.role_id
       WHERE trim(upper(u.name)) = trim(upper($1))
@@ -164,10 +164,18 @@ app.post("/login", async (req, res) => {
     const user = result.rows[0];
 
     /* ================= CEK PASSWORD ================= */
-    const isMatch = bcrypt.compareSync(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Password salah" });
-    }
+ const isMatch = bcrypt.compareSync(password, user.password);
+if (!isMatch) {
+  return res.status(401).json({ message: "Password salah" });
+}
+
+const email = (user.email ?? "").toString().trim();
+if (email === "") {
+  return res.status(428).json({
+    code: "EMAIL_REQUIRED",
+    message: "Email wajib diisi untuk fitur lupa password & OTP.",
+  });
+}
 
 
 /* ================= CEK DEVICE LAIN (STILL ACTIVE & FRESH) ================= */
@@ -275,11 +283,193 @@ if (activeSession.rowCount > 0) {
         site_id: user.site_id,
         department_id: user.department_id,
         must_change_password: user.must_change_password,
+        email: user.email,
+        employee_id: user.employee_id,
       },
     });
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Login gagal" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/login/set-email", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { name, password, site_id, department_id, device_id, email, fcm_token } = req.body;
+
+    if (!name || !password || !site_id || !department_id || !device_id || !email) {
+      return res.status(400).json({ message: "Data tidak lengkap" });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ message: "Format email tidak valid" });
+    }
+
+    // 1) cari user + role + email
+    const result = await client.query(
+      `
+      SELECT u.id, u.name, u.password,
+             u.role_id, r.role_name,
+             u.site_id, u.department_id,
+             u.must_change_password,
+             u.email, u.employee_id
+      FROM users u
+      JOIN roles r ON r.id = u.role_id
+      WHERE trim(upper(u.name)) = trim(upper($1))
+        AND u.site_id = $2
+        AND u.department_id = $3
+        AND u.deleted_at IS NULL
+      LIMIT 1
+      `,
+      [name, site_id, department_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({ message: "User / site / department tidak cocok" });
+    }
+
+    const user = result.rows[0];
+
+    // 2) cek password
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ message: "Password salah" });
+    }
+
+    // 3) update email hanya jika masih kosong
+    const existing = (user.email ?? "").toString().trim();
+    if (existing === "") {
+      try {
+        await client.query(
+          `
+          UPDATE users
+          SET email = $1,
+              updated_at = NOW()
+          WHERE id = $2
+          `,
+          [cleanEmail, user.id]
+        );
+      } catch (e) {
+        // unique violation
+        if (e.code === "23505") {
+          return res.status(409).json({ message: "Email sudah digunakan akun lain" });
+        }
+        throw e;
+      }
+    }
+
+    // 4) cek konflik device lain (sama seperti /login)
+    const activeSession = await client.query(
+      `
+      SELECT id
+      FROM user_sessions
+      WHERE user_id = $1
+        AND is_active = true
+        AND expired_at > NOW()
+        AND device_id <> $2
+        AND last_seen > NOW() - INTERVAL '2 minutes'
+      LIMIT 1
+      `,
+      [user.id, device_id]
+    );
+
+    if (activeSession.rowCount > 0) {
+      // ✅ tetap konsisten: ini akan memicu flow OTP takeover di app
+      return res.status(409).json({
+        message: "Akun ini sedang login di device lain",
+        otp_required: true
+      });
+    }
+
+    // 5) matikan session lama
+    await client.query(
+      `
+      UPDATE user_sessions
+      SET is_active = false,
+          expired_at = NOW(),
+          logout_at = NOW(),
+          logout_reason = 'relogin'
+      WHERE user_id = $1
+        AND is_active = true
+      `,
+      [user.id]
+    );
+
+    // 6) generate JWT
+    const token = jwt.sign(
+      {
+        id: user.id,
+        role_id: user.role_id,
+        role: user.role_name,
+        site_id: user.site_id,
+        department_id: user.department_id,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "3d" }
+    );
+
+    // 7) simpan session baru
+    await client.query(
+      `
+      INSERT INTO user_sessions
+      (user_id, token, device_id, is_active, expired_at, last_seen)
+      VALUES ($1, $2, $3, true, NOW() + INTERVAL '3 days', NOW())
+      `,
+      [user.id, token, device_id]
+    );
+
+    // 8) simpan device + FCM (copy dari /login)
+    const cleanToken = (fcm_token ?? "").toString().trim();
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
+      try {
+        await client.query(
+          `
+          DELETE FROM user_devices
+          WHERE fcm_token = $1
+            AND user_id <> $2
+          `,
+          [cleanToken, user.id]
+        );
+
+        await client.query(
+          `
+          INSERT INTO user_devices (user_id, device_id, fcm_token, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (user_id, device_id)
+          DO UPDATE SET
+            fcm_token = EXCLUDED.fcm_token,
+            updated_at = NOW()
+          `,
+          [user.id, device_id, cleanToken]
+        );
+
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK");
+      }
+    }
+
+    // 9) balikin response SAMA seperti /login (biar Flutter reuse _onLoginSuccess)
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role_name,
+        site_id: user.site_id,
+        department_id: user.department_id,
+        must_change_password: user.must_change_password,
+        email: user.email || cleanEmail,
+      },
+    });
+  } catch (err) {
+    console.error("set-email error:", err);
+    return res.status(500).json({ message: "Gagal menyimpan email" });
   } finally {
     client.release();
   }
@@ -408,7 +598,7 @@ app.post("/login-force/confirm", async (req, res) => {
              u.role_id, r.role_name,
              u.site_id, u.department_id,
              u.must_change_password,
-             u.email
+             u.email, u.employee_id
       FROM users u
       JOIN roles r ON r.id = u.role_id
       WHERE trim(upper(u.name)) = trim(upper($1))
@@ -543,6 +733,8 @@ app.post("/login-force/confirm", async (req, res) => {
         site_id: user.site_id,
         department_id: user.department_id,
         must_change_password: user.must_change_password,
+        email: user.email,
+        employee_id: user.employee_id,
       },
     });
   } catch (err) {
