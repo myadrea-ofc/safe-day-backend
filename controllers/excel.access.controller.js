@@ -1,0 +1,196 @@
+const pool = require("../db");
+
+// ==============================
+// GET LIST ACCESS
+// ==============================
+exports.getAccessList = async (req, res) => {
+  try {
+    const { role, site_id } = req.user;
+
+    let query = `
+      SELECT 
+        e.user_id,
+        u.name as user_name,
+        r.role_name,
+        e.site_id,
+        s.site_name,
+        e.can_download,
+        e.seen_by_admin
+      FROM excel_download_access e
+      JOIN users u ON u.id = e.user_id
+      JOIN roles r ON r.id = u.role_id
+      JOIN sites s ON s.id = e.site_id
+      WHERE e.revoked_at IS NULL
+    `;
+
+    let params = [];
+
+    if (role === "admin") {
+      query += ` AND e.site_id = $1`;
+      params.push(site_id);
+    }
+
+    const { rows } = await pool.query(query, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch access list" });
+  }
+};
+
+// ==============================
+// GRANT ACCESS
+// ==============================
+exports.grantAccess = async (req, res) => {
+  try {
+    const { role, site_id: adminSiteId, id: grantedBy } = req.user;
+    const { user_id, site_id } = req.body;
+
+    // 1️⃣ hanya admin / superadmin boleh
+    if (role !== "admin" && role !== "superadmin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    // 2️⃣ admin hanya boleh grant di site sendiri
+    if (role === "admin" && site_id !== adminSiteId) {
+      return res.status(403).json({ message: "Admin only for own site" });
+    }
+
+    // 3️⃣ cek user target
+    const userCheck = await pool.query(
+      "SELECT id, site_id FROM users WHERE id = $1 AND deleted_at IS NULL",
+      [user_id]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const targetUser = userCheck.rows[0];
+
+    if (role === "admin" && targetUser.site_id !== adminSiteId) {
+      return res.status(403).json({ message: "User not in your site" });
+    }
+
+    // 4️⃣ insert atau update
+    await pool.query(
+      `
+      INSERT INTO excel_download_access 
+      (user_id, site_id, granted_by, seen_by_admin)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id, site_id)
+      WHERE revoked_at IS NULL
+      DO UPDATE SET 
+        can_download = true,
+        revoked_at = NULL,
+        updated_at = CURRENT_TIMESTAMP,
+        seen_by_admin = EXCLUDED.seen_by_admin
+      `,
+      [
+        user_id,
+        site_id,
+        grantedBy,
+        role === "superadmin" ? false : true
+      ]
+    );
+
+    res.json({ message: "Access granted" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Grant failed" });
+  }
+};
+
+// ==============================
+// REVOKE ACCESS
+// ==============================
+exports.revokeAccess = async (req, res) => {
+  try {
+    const { role, site_id: adminSiteId } = req.user;
+    const { user_id, site_id } = req.body;
+
+    if (role !== "admin" && role !== "superadmin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (role === "admin" && site_id !== adminSiteId) {
+      return res.status(403).json({ message: "Admin only for own site" });
+    }
+
+    await pool.query(
+      `
+      UPDATE excel_download_access
+      SET revoked_at = CURRENT_TIMESTAMP,
+          can_download = false
+      WHERE user_id = $1 AND site_id = $2
+      `,
+      [user_id, site_id]
+    );
+
+    res.json({ message: "Access revoked" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Revoke failed" });
+  }
+};
+
+// ==============================
+// UNSEEN COUNT (ADMIN ONLY)
+// ==============================
+exports.getUnseenCount = async (req, res) => {
+  try {
+    const { role, site_id } = req.user;
+
+    if (role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const { rows } = await pool.query(
+      `
+      SELECT COUNT(*) 
+      FROM excel_download_access
+      WHERE site_id = $1
+      AND seen_by_admin = false
+      AND revoked_at IS NULL
+      `,
+      [site_id]
+    );
+
+    res.json({ count: parseInt(rows[0].count) });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed" });
+  }
+};
+
+// ==============================
+// MARK AS SEEN
+// ==============================
+exports.markSeen = async (req, res) => {
+  try {
+    const { role, site_id } = req.user;
+
+    if (role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await pool.query(
+      `
+      UPDATE excel_download_access
+      SET seen_by_admin = true
+      WHERE site_id = $1
+      `,
+      [site_id]
+    );
+
+    res.json({ message: "Marked as seen" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed" });
+  }
+};
