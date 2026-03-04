@@ -32,7 +32,7 @@ function buildDailyPlanMessage({ creatorRole }) {
 
   return {
     title: "📝 Daily Plan Baru Ready!",
-    body: `📢 Hai! ${senderName} baru aja buat Daily Plan nih 📋. Yuk, lihat dan kasih rating dulu ya! ⭐`,
+    body: `📢 Hai! ${senderName} baru aja buat Daily Plan nih 📋. Yuk, lihat dan kasih rating dulu dong! ⭐`,
   };
 }
 
