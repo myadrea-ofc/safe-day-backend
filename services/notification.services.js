@@ -28,7 +28,7 @@ function normalizeSiteIds(siteIds) {
 /* ================== BUILD MESSAGE ================== */
 function buildDailyPlanMessage({ creatorRole }) {
   const senderName =
-    creatorRole === "superadmin" ? "HO" : creatorRole === "admin" ? "HSES" : "Tim";
+    creatorRole === "superadmin" ? "Head Office" : creatorRole === "admin" ? "HSES" : "Tim";
 
   return {
     title: "📝 Daily Plan Baru Ready!",
@@ -41,7 +41,7 @@ function buildBuletinMessage({ creatorRole }) {
     title: "📰 Buletin Baru!",
     body:
       creatorRole === "superadmin"
-        ? "📢 HO upload Buletin baru. Yuk, lihat dan kasih rating dulu ya! ⭐"
+        ? "📢 Head Office upload Buletin baru. Yuk, lihat dan kasih rating dulu ya! ⭐"
         : "📢 HSES upload Buletin baru. Yuk, lihat dan kasih rating dulu ya! ⭐",
   };
 }
