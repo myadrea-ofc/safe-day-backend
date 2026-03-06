@@ -122,12 +122,13 @@ exports.listRequests = async (req, res) => {
     d.department_name,
     r.decided_by_user_id,
     decider.name AS decided_by_name,
-    decider.role AS decided_by_role
+    decider_role.role_name AS decided_by_role
   FROM excel_access_requests r
   JOIN users u ON u.id = r.requester_user_id
   LEFT JOIN departments d ON d.id = u.department_id
   LEFT JOIN sites s ON s.id = r.site_id
   LEFT JOIN users decider ON decider.id = r.decided_by_user_id
+  LEFT JOIN roles decider_role ON decider_role.id = decider.role_id
   ${where}
   ORDER BY r.requested_at DESC
   `,
