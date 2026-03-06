@@ -88,6 +88,7 @@ const authRoutes = require("./routes/auth.routes");
 
 const notificationRoutes = require("./routes/notification.routes")
 const excelAccessRoutes = require("./routes/excelaccess.routes");
+const excelAccessRequestRoutes = require("./routes/excelaccessrequest.routes");
 
 
 
@@ -132,6 +133,7 @@ app.use("/hses_buletin", buletinRoutes);
 
 app.use("/notifications", notificationRoutes);
 app.use("/excel-access", excelAccessRoutes);
+app.use("/excel-access-requests", excelAccessRequestRoutes);
 
 
 app.post("/login", async (req, res) => {

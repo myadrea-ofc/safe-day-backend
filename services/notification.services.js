@@ -49,7 +49,7 @@ function buildBuletinMessage({ creatorRole }) {
 function buildLpiMessage({ senderName }) {
   return {
     title: "⚠️ PERHATIAN LPI ACCIDENT",
-    body: `🚨 ${senderName} mengirim LPI. Tap untuk cek detaiL 📍`,
+    body: `🚨 ${senderName} mengirim LPI. Tap untuk cek detail 📍`,
   };
 }
 
@@ -413,11 +413,153 @@ async function sendRoleChangedNotification({ userId, newRoleName }) {
   }
 }
 
+// ================== EXCEL ACCESS REQUEST NOTIF ==================
+async function getAdminsAndSuperadminsForSite({ siteId, creatorId }) {
+  const result = await pool.query(
+    `
+    SELECT u.id
+    FROM users u
+    JOIN roles r ON r.id = u.role_id
+    WHERE u.deleted_at IS NULL
+      AND u.id != $2
+      AND (
+        r.role_name = 'superadmin'
+        OR (r.role_name = 'admin' AND u.site_id = $1)
+      )
+    `,
+    [Number(siteId), Number(creatorId)]
+  );
+
+  return result.rows.map((r) => r.id);
+}
+
+function buildExcelAccessCreatedMessage({ requesterName }) {
+  return {
+    title: "📄 Permintaan Akses Excel P5M",
+    body: `👤 ${requesterName || "Member"} meminta izin export Excel P5M. Tap untuk review.`,
+  };
+}
+
+function buildExcelAccessDecisionMessage({ approved, decidedByName, rejectReason }) {
+  if (approved) {
+    return {
+      title: "✅ Akses Excel Disetujui",
+      body: `🎉 Permintaanmu disetujui oleh ${decidedByName || "Admin"}. Sekarang kamu bisa export Excel P5M.`,
+    };
+  }
+  return {
+    title: "❌ Akses Excel Ditolak",
+    body: `Permintaanmu ditolak oleh ${decidedByName || "Admin"}${rejectReason ? `. Alasan: ${rejectReason}` : ""}`,
+  };
+}
+
+async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
+  if (!userIds || userIds.length === 0) return;
+
+  // 1) save ke DB notifications
+  await saveNotifications({ userIds, title, body, data });
+
+  // 2) push via FCM
+  const tokens = await getFcmTokensByUserIds(userIds);
+  if (!tokens.length) return;
+
+  const tokenChunks = chunkArray(tokens, 500);
+  const invalidSet = new Set();
+
+  for (const chunk of tokenChunks) {
+    const resp = await admin.messaging().sendEachForMulticast({
+      tokens: chunk,
+      notification: { title, body },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "high_importance_channel",
+          sound: "default",
+        },
+      },
+      data: Object.fromEntries(
+        Object.entries(data || {}).map(([k, v]) => [k, String(v)])
+      ),
+    });
+
+    resp.responses.forEach((r, idx) => {
+      if (!r.success) {
+        const code = r.error?.code;
+        if (
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token"
+        ) {
+          invalidSet.add(chunk[idx]);
+        }
+      }
+    });
+  }
+
+  await deleteInvalidTokens([...invalidSet]);
+}
+
+async function sendExcelAccessRequestCreatedNotification({
+  requesterId,
+  requesterName,
+  siteId,
+  requestId,
+}) {
+  const targetIdsRaw = await getAdminsAndSuperadminsForSite({
+    siteId,
+    creatorId: requesterId,
+  });
+
+  const userIds = [...new Set(targetIdsRaw)];
+  if (!userIds.length) return;
+
+  const msg = buildExcelAccessCreatedMessage({ requesterName });
+
+  await sendToUserIdsFCMAndSave({
+    userIds,
+    title: msg.title,
+    body: msg.body,
+    data: {
+      type: "excel_access_request",
+      excel_access_request_id: requestId,
+      site_id: siteId,
+      requester_user_id: requesterId,
+    },
+  });
+}
+
+async function sendExcelAccessDecisionNotification({
+  requesterId,
+  siteId,
+  requestId,
+  approved,
+  decidedByName,
+  rejectReason,
+}) {
+  const msg = buildExcelAccessDecisionMessage({
+    approved,
+    decidedByName,
+    rejectReason,
+  });
+
+  await sendToUserIdsFCMAndSave({
+    userIds: [Number(requesterId)],
+    title: msg.title,
+    body: msg.body,
+    data: {
+      type: "excel_access_decision",
+      excel_access_request_id: requestId,
+      site_id: siteId,
+      approved: approved ? "1" : "0",
+    },
+  });
+}
 
 module.exports = {
   sendDailyPlanNotification,
   sendBuletinNotification,
   sendLpiNotification,
   sendRoleChangedNotification,
+  sendExcelAccessRequestCreatedNotification,
+  sendExcelAccessDecisionNotification,
   getTargetUsers,
 };

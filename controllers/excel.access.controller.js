@@ -9,14 +9,15 @@ exports.getAccessList = async (req, res) => {
 
     let query = `
       SELECT 
-        e.user_id,
-        u.name as user_name,
-        r.role_name,
-        e.site_id,
-        s.site_name,
-        e.can_download,
-        e.seen_by_admin
-      FROM excel_download_access e
+  e.user_id,
+  u.name as user_name,
+  r.role_name,
+  e.site_id,
+  s.site_name,
+  e.can_download,
+  e.seen_by_admin,
+  e.created_at
+FROM excel_download_access e
       JOIN users u ON u.id = e.user_id
       JOIN roles r ON r.id = u.role_id
       JOIN sites s ON s.id = e.site_id
@@ -53,7 +54,7 @@ exports.grantAccess = async (req, res) => {
     }
 
     // 2️⃣ admin hanya boleh grant di site sendiri
-    if (role === "admin" && site_id !== adminSiteId) {
+    if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
 
@@ -69,37 +70,39 @@ exports.grantAccess = async (req, res) => {
 
     const targetUser = userCheck.rows[0];
 
-    if (role === "admin" && targetUser.site_id !== adminSiteId) {
+    if (role === "admin" && Number(targetUser.site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "User not in your site" });
     }
 
-    // 4️⃣ insert atau update
+    // 4️⃣ REVOKE ACTIVE DULU (biar aman dengan partial unique index)
     await pool.query(
       `
-      INSERT INTO excel_download_access 
-      (user_id, site_id, granted_by, seen_by_admin)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id, site_id)
-      WHERE revoked_at IS NULL
-      DO UPDATE SET 
-        can_download = true,
-        revoked_at = NULL,
-        updated_at = CURRENT_TIMESTAMP,
-        seen_by_admin = EXCLUDED.seen_by_admin
+      UPDATE excel_download_access
+      SET revoked_at = NOW(),
+          updated_at = NOW(),
+          can_download = false
+      WHERE user_id = $1
+        AND site_id = $2
+        AND revoked_at IS NULL
       `,
-      [
-        user_id,
-        site_id,
-        grantedBy,
-        role === "superadmin" ? false : true
-      ]
+      [user_id, site_id]
     );
 
-    res.json({ message: "Access granted" });
+    // 5️⃣ INSERT BARU (aktif)
+    await pool.query(
+      `
+      INSERT INTO excel_download_access
+        (user_id, site_id, can_download, granted_by, created_at, updated_at, seen_by_admin, revoked_at)
+      VALUES
+        ($1, $2, true, $3, NOW(), NOW(), $4, NULL)
+      `,
+      [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
+    );
 
+    return res.json({ message: "Access granted" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Grant failed" });
+    return res.status(500).json({ message: "Grant failed" });
   }
 };
 
@@ -192,5 +195,33 @@ exports.markSeen = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed" });
+  }
+};
+
+// ==============================
+// GET MY ACCESS (MEMBER)
+// ==============================
+exports.getMyAccess = async (req, res) => {
+  try {
+    const { id: userId, site_id: siteId } = req.user;
+
+    const r = await pool.query(
+      `
+      SELECT can_download
+      FROM excel_download_access
+      WHERE user_id = $1
+        AND site_id = $2
+        AND revoked_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [userId, siteId]
+    );
+
+    const can = r.rowCount > 0 ? r.rows[0].can_download === true : false;
+    return res.json({ can_download: can });
+  } catch (err) {
+    console.error("GET MY EXCEL ACCESS ERROR:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
