@@ -110,22 +110,22 @@ exports.listRequests = async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-  r.id,
-  r.site_id,
-  s.site_name AS site_name,
-  r.status,
-  r.requested_at,
-  r.decided_at,
-  r.reject_reason,
-  r.requester_user_id,
-  u.name AS requester_name,
-  d.name AS department_name
+        r.id,
+        r.site_id,
+        s.site_name,
+        r.status,
+        r.requested_at,
+        r.decided_at,
+        r.reject_reason,
+        r.requester_user_id,
+        u.name AS requester_name,
+        d.department_name
       FROM excel_access_requests r
-JOIN users u ON u.id = r.requester_user_id
-LEFT JOIN departments d ON d.id = u.department_id
-LEFT JOIN sites s ON s.id = r.site_id
-${where}
-ORDER BY r.requested_at DESC
+      JOIN users u ON u.id = r.requester_user_id
+      LEFT JOIN departments d ON d.id = u.department_id
+      LEFT JOIN sites s ON s.id = r.site_id
+      ${where}
+      ORDER BY r.requested_at DESC
       `,
       params
     );
