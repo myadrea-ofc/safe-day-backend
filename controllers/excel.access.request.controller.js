@@ -108,27 +108,31 @@ exports.listRequests = async (req, res) => {
     }
 
     const result = await pool.query(
-      `
-      SELECT
-        r.id,
-        r.site_id,
-        s.site_name,
-        r.status,
-        r.requested_at,
-        r.decided_at,
-        r.reject_reason,
-        r.requester_user_id,
-        u.name AS requester_name,
-        d.department_name
-      FROM excel_access_requests r
-      JOIN users u ON u.id = r.requester_user_id
-      LEFT JOIN departments d ON d.id = u.department_id
-      LEFT JOIN sites s ON s.id = r.site_id
-      ${where}
-      ORDER BY r.requested_at DESC
-      `,
-      params
-    );
+  `
+  SELECT
+    r.id,
+    r.site_id,
+    s.site_name,
+    r.status,
+    r.requested_at,
+    r.decided_at,
+    r.reject_reason,
+    r.requester_user_id,
+    u.name AS requester_name,
+    d.department_name,
+    r.decided_by_user_id,
+    decider.name AS decided_by_name,
+    decider.role AS decided_by_role
+  FROM excel_access_requests r
+  JOIN users u ON u.id = r.requester_user_id
+  LEFT JOIN departments d ON d.id = u.department_id
+  LEFT JOIN sites s ON s.id = r.site_id
+  LEFT JOIN users decider ON decider.id = r.decided_by_user_id
+  ${where}
+  ORDER BY r.requested_at DESC
+  `,
+  params
+);
 
     return res.json(result.rows);
   } catch (err) {
