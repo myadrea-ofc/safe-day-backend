@@ -64,7 +64,7 @@ exports.createRequest = async (req, res) => {
   }
 };
 
-exports.getMyLatest = async (req, res) => {
+exports.getMyLatestRequest = async (req, res) => {
   try {
     const { id: userId, site_id: siteId } = req.user;
 
