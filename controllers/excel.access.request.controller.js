@@ -64,24 +64,41 @@ exports.createRequest = async (req, res) => {
   }
 };
 
-exports.getMyLatestRequest = async (req, res) => {
+exports.getMyLatest = async (req, res) => {
   try {
-    const requesterId = req.user.id;
-    const result = await pool.query(
+    const { id: userId, site_id: siteId } = req.user;
+
+    const r = await pool.query(
       `
-      SELECT id, site_id, status, requested_at, decided_at, reject_reason
-      FROM excel_access_requests
-      WHERE requester_user_id = $1
-      ORDER BY requested_at DESC
+      SELECT r.*,
+             EXISTS (
+               SELECT 1
+               FROM excel_download_access a
+               WHERE a.user_id = r.requester_user_id
+                 AND a.site_id = r.site_id
+                 AND a.revoked_at IS NULL
+             ) AS still_has_access
+      FROM excel_access_requests r
+      WHERE r.requester_user_id = $1
+        AND r.site_id = $2
+      ORDER BY r.requested_at DESC
       LIMIT 1
       `,
-      [requesterId]
+      [userId, siteId]
     );
 
-    return res.json(result.rows[0] || null);
+    if (r.rowCount === 0) return res.json(null);
+
+    const row = r.rows[0];
+
+    res.json({
+      ...row,
+      revoked: row.status === "approved" && row.still_has_access === false
+    });
+
   } catch (err) {
-    console.error("GET MY EXCEL REQUEST ERROR:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error(err);
+    res.status(500).json({ message: "Get my request failed" });
   }
 };
 

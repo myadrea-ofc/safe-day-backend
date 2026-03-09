@@ -453,6 +453,25 @@ function buildExcelAccessDecisionMessage({ approved, decidedByName, rejectReason
   };
 }
 
+async function sendExcelAccessRevokedNotification({
+  requesterId,
+  siteId,
+  revokedByName,
+}) {
+  const title = "⚠️ Akses Excel Dicabut";
+  const body = `Akses export Excel P5M kamu telah dinonaktifkan oleh ${revokedByName || "Admin"}. Jika perlu, silakan ajukan ulang izin akses.`;
+
+  await sendToUserIdsFCMAndSave({
+    userIds: [Number(requesterId)],
+    title,
+    body,
+    data: {
+      type: "excel_access_revoked",
+      site_id: Number(siteId),
+    },
+  });
+}
+
 async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
   if (!userIds || userIds.length === 0) return;
 
@@ -561,5 +580,6 @@ module.exports = {
   sendRoleChangedNotification,
   sendExcelAccessRequestCreatedNotification,
   sendExcelAccessDecisionNotification,
+  sendExcelAccessRevokedNotification,
   getTargetUsers,
 };

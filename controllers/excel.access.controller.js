@@ -1,4 +1,7 @@
 const pool = require("../config/db");
+const {
+  sendExcelAccessRevokedNotification,
+} = require("../services/notification.services");
 
 // ==============================
 // GET LIST ACCESS
@@ -111,29 +114,62 @@ exports.grantAccess = async (req, res) => {
 // ==============================
 exports.revokeAccess = async (req, res) => {
   try {
-    const { role, site_id: adminSiteId } = req.user;
+    const { role, site_id: adminSiteId, name: revokedByName } = req.user;
     const { user_id, site_id } = req.body;
 
     if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    if (role === "admin" && site_id !== adminSiteId) {
+    if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
 
-    await pool.query(
+    const targetUserRes = await pool.query(
+      `
+      SELECT id, site_id
+      FROM users
+      WHERE id = $1
+        AND deleted_at IS NULL
+      `,
+      [user_id]
+    );
+
+    if (targetUserRes.rowCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const targetUser = targetUserRes.rows[0];
+
+    if (role === "admin" && Number(targetUser.site_id) !== Number(adminSiteId)) {
+      return res.status(403).json({ message: "User not in your site" });
+    }
+
+    const revokeRes = await pool.query(
       `
       UPDATE excel_download_access
       SET revoked_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP,
           can_download = false
-      WHERE user_id = $1 AND site_id = $2
+      WHERE user_id = $1
+        AND site_id = $2
+        AND revoked_at IS NULL
+      RETURNING user_id, site_id
       `,
       [user_id, site_id]
     );
 
-    res.json({ message: "Access revoked" });
+    if (revokeRes.rowCount === 0) {
+      return res.status(404).json({ message: "Access not found or already revoked" });
+    }
 
+    await sendExcelAccessRevokedNotification({
+      requesterId: user_id,
+      siteId: site_id,
+      revokedByName,
+    });
+
+    res.json({ message: "Access revoked" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Revoke failed" });
