@@ -461,12 +461,47 @@ async function sendExcelAccessRevokedNotification({
   const title = "⚠️ Akses Excel Dicabut";
   const body = `Akses export Excel P5M kamu telah dinonaktifkan oleh ${revokedByName || "Admin"}. Jika perlu, silakan ajukan ulang izin akses.`;
 
+  console.log("📤 SEND REVOKE NOTIF:", {
+    requesterId,
+    siteId,
+    revokedByName,
+    title,
+    body,
+  });
+
   await sendToUserIdsFCMAndSave({
     userIds: [Number(requesterId)],
     title,
     body,
     data: {
       type: "excel_access_revoked",
+      site_id: Number(siteId),
+    },
+  });
+}
+
+async function sendExcelAccessGrantedNotification({
+  requesterId,
+  siteId,
+  grantedByName,
+}) {
+  const title = "✅ Akses Excel Diaktifkan";
+  const body = `Akses export Excel P5M kamu telah diaktifkan oleh ${grantedByName || "Admin"}. Sekarang kamu bisa melihat P5M Results dan export Excel kembali.`;
+
+  console.log("📤 SEND GRANTED NOTIF:", {
+    requesterId,
+    siteId,
+    grantedByName,
+    title,
+    body,
+  });
+
+  await sendToUserIdsFCMAndSave({
+    userIds: [Number(requesterId)],
+    title,
+    body,
+    data: {
+      type: "excel_access_granted",
       site_id: Number(siteId),
     },
   });
@@ -480,7 +515,10 @@ async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
 
   // 2) push via FCM
   const tokens = await getFcmTokensByUserIds(userIds);
-  if (!tokens.length) return;
+  if (!tokens.length) {
+    console.log("❌ No tokens for users:", userIds);
+    return;
+  }
 
   const tokenChunks = chunkArray(tokens, 500);
   const invalidSet = new Set();
@@ -497,12 +535,26 @@ async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
         },
       },
       data: Object.fromEntries(
-        Object.entries(data || {}).map(([k, v]) => [k, String(v)])
+        Object.entries({
+          ...(data || {}),
+          title,
+          body,
+        }).map(([k, v]) => [k, String(v)])
       ),
+    });
+
+    console.log("✅ FCM sent:", {
+      title,
+      body,
+      data,
+      successCount: resp.successCount,
+      failureCount: resp.failureCount,
     });
 
     resp.responses.forEach((r, idx) => {
       if (!r.success) {
+        console.log("❌ FCM send error:", r.error?.code, r.error?.message);
+
         const code = r.error?.code;
         if (
           code === "messaging/registration-token-not-registered" ||
@@ -581,5 +633,6 @@ module.exports = {
   sendExcelAccessRequestCreatedNotification,
   sendExcelAccessDecisionNotification,
   sendExcelAccessRevokedNotification,
+  sendExcelAccessGrantedNotification,
   getTargetUsers,
 };

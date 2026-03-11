@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const {
   sendExcelAccessRevokedNotification,
+  sendExcelAccessGrantedNotification,
 } = require("../services/notification.services");
 
 // ==============================
@@ -48,20 +49,17 @@ FROM excel_download_access e
 // ==============================
 exports.grantAccess = async (req, res) => {
   try {
-    const { role, site_id: adminSiteId, id: grantedBy } = req.user;
+    const { role, site_id: adminSiteId, id: grantedBy, name: grantedByName } = req.user;
     const { user_id, site_id } = req.body;
 
-    // 1️⃣ hanya admin / superadmin boleh
     if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    // 2️⃣ admin hanya boleh grant di site sendiri
     if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
 
-    // 3️⃣ cek user target
     const userCheck = await pool.query(
       "SELECT id, site_id FROM users WHERE id = $1 AND deleted_at IS NULL",
       [user_id]
@@ -77,7 +75,6 @@ exports.grantAccess = async (req, res) => {
       return res.status(403).json({ message: "User not in your site" });
     }
 
-    // 4️⃣ REVOKE ACTIVE DULU (biar aman dengan partial unique index)
     await pool.query(
       `
       UPDATE excel_download_access
@@ -91,7 +88,6 @@ exports.grantAccess = async (req, res) => {
       [user_id, site_id]
     );
 
-    // 5️⃣ INSERT BARU (aktif)
     await pool.query(
       `
       INSERT INTO excel_download_access
@@ -101,6 +97,12 @@ exports.grantAccess = async (req, res) => {
       `,
       [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
     );
+
+    await sendExcelAccessGrantedNotification({
+      requesterId: user_id,
+      siteId: site_id,
+      grantedByName,
+    });
 
     return res.json({ message: "Access granted" });
   } catch (err) {
@@ -124,6 +126,13 @@ exports.revokeAccess = async (req, res) => {
     if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
+
+    console.log("🔒 REVOKE ACCESS:", {
+  user_id,
+  site_id,
+  revokedByName,
+  role,
+});
 
     const targetUserRes = await pool.query(
       `

@@ -11,7 +11,7 @@ router.post("/revoke", auth, controller.revokeAccess);
 router.get("/unseen-count", auth, controller.getUnseenCount);
 router.post("/mark-seen", auth, controller.markSeen);
 
-// ✅ MEMBER cek aksesnya sendiri
+// MEMBER cek aksesnya sendiri
 router.get("/me", auth, allowRoles("member"), controller.getMyAccess);
 
 module.exports = router;
