@@ -157,7 +157,6 @@ async function sendDailyPlanNotification({
   creatorRole,
   siteIds,
   creatorId,
-  title,
   planId,
 }) {
   try {
@@ -167,7 +166,7 @@ async function sendDailyPlanNotification({
     const userIds = await getTargetUsers({ creatorRole, siteIds, creatorId });
     if (!userIds.length) return console.log("❌ No target users (daily_plan)");
 
-    const message = buildDailyPlanMessage({ creatorRole, title });
+    const message = buildDailyPlanMessage({ creatorRole});
 
     await saveNotifications({
       userIds,
@@ -220,7 +219,6 @@ async function sendBuletinNotification({
   creatorRole,
   siteIds,
   creatorId,
-  title,
   buletinId,
 }) {
   try {
@@ -230,7 +228,7 @@ async function sendBuletinNotification({
     const userIds = await getTargetUsers({ creatorRole, siteIds, creatorId });
     if (!userIds.length) return console.log("❌ No target users (buletin)");
 
-    const message = buildBuletinMessage({ creatorRole, title });
+    const message = buildBuletinMessage({ creatorRole });
 
     await saveNotifications({
       userIds,
@@ -345,9 +343,20 @@ async function sendLpiNotification({ creatorId, siteId, senderName, lpiId }) {
 async function sendRoleChangedNotification({ userId, newRoleName }) {
   try {
     userId = Number(userId);
-    if (!userId || Number.isNaN(userId)) return console.log("❌ Invalid userId (role_changed)");
+    if (!userId || Number.isNaN(userId)) {
+      return console.log("❌ Invalid userId (role_changed)");
+    }
 
-    // Ambil semua token user tsb (multi device)
+    const title = "🔐 Role Diperbarui";
+    const body = `🔄 Sekarang kamu adalah ${newRoleName}. Silahkan login ulang ya. ✨`;
+
+    await saveNotifications({
+      userIds: [userId],
+      title,
+      body,
+      data: { type: "role_changed" },
+    });
+
     const tokensRes = await pool.query(
       `
       SELECT DISTINCT fcm_token
@@ -361,16 +370,6 @@ async function sendRoleChangedNotification({ userId, newRoleName }) {
 
     const tokens = (tokensRes.rows || []).map((r) => r.fcm_token).filter(Boolean);
     if (!tokens.length) return console.log("❌ No tokens (role_changed)");
-
-    const title = "🔐 Role Diperbarui";
-    const body = `🔄 Sekarang kamu adalah ${newRoleName}. Silahkan login ulang ya. ✨`;
-
-    await saveNotifications({
-      userIds: [userId],
-      title,
-      body,
-      data: { type: "role_changed" },
-    });
 
     const tokenChunks = chunkArray(tokens, 500);
     const invalidSet = new Set();
@@ -406,7 +405,6 @@ async function sendRoleChangedNotification({ userId, newRoleName }) {
     }
 
     await deleteInvalidTokens([...invalidSet]);
-
     console.log("✅ ROLE CHANGED notif sent to user:", userId);
   } catch (err) {
     console.error("❌ ERROR SEND ROLE CHANGED NOTIFICATION:", err);
@@ -447,78 +445,15 @@ function buildExcelAccessDecisionMessage({ approved, decidedByName, rejectReason
       body: `🎉 Permintaanmu disetujui oleh ${decidedByName || "Admin"}. Sekarang kamu bisa export Excel P5M.`,
     };
   }
+
   return {
     title: "❌ Akses Excel Ditolak",
     body: `Permintaanmu ditolak oleh ${decidedByName || "Admin"}${rejectReason ? `. Alasan: ${rejectReason}` : ""}`,
   };
 }
 
-async function sendExcelAccessRevokedNotification({
-  requesterId,
-  siteId,
-  revokedByName,
-}) {
-  const title = "⚠️ Akses Excel Dicabut";
-  const body = `Akses export Excel P5M kamu telah dinonaktifkan oleh ${revokedByName || "Admin"}. Jika perlu, silakan ajukan ulang izin akses.`;
-
-  console.log("📤 SEND REVOKE NOTIF:", {
-    requesterId,
-    siteId,
-    revokedByName,
-    title,
-    body,
-  });
-
-  await sendToUserIdsFCMAndSave({
-    userIds: [Number(requesterId)],
-    title,
-    body,
-    data: {
-      type: "excel_access_revoked",
-      site_id: Number(siteId),
-    },
-  });
-}
-
-async function sendExcelAccessGrantedNotification({
-  requesterId,
-  siteId,
-  grantedByName,
-}) {
-  const title = "✅ Akses Excel Diaktifkan";
-  const body = `Akses export Excel P5M kamu telah diaktifkan oleh ${grantedByName || "Admin"}. Sekarang kamu bisa melihat P5M Results dan export Excel kembali.`;
-
-  console.log("📤 SEND GRANTED NOTIF:", {
-    requesterId,
-    siteId,
-    grantedByName,
-    title,
-    body,
-  });
-
-  await sendToUserIdsFCMAndSave({
-    userIds: [Number(requesterId)],
-    title,
-    body,
-    data: {
-      type: "excel_access_granted",
-      site_id: Number(siteId),
-    },
-  });
-}
-
-async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
-  if (!userIds || userIds.length === 0) return;
-
-  // 1) save ke DB notifications
-  await saveNotifications({ userIds, title, body, data });
-
-  // 2) push via FCM
-  const tokens = await getFcmTokensByUserIds(userIds);
-  if (!tokens.length) {
-    console.log("❌ No tokens for users:", userIds);
-    return;
-  }
+async function sendFcmMulticastWithCleanup({ tokens, title, body, data }) {
+  if (!tokens || !tokens.length) return;
 
   const tokenChunks = chunkArray(tokens, 500);
   const invalidSet = new Set();
@@ -535,11 +470,7 @@ async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
         },
       },
       data: Object.fromEntries(
-        Object.entries({
-          ...(data || {}),
-          title,
-          body,
-        }).map(([k, v]) => [k, String(v)])
+        Object.entries(data || {}).map(([k, v]) => [k, String(v)])
       ),
     });
 
@@ -553,7 +484,9 @@ async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
 
     resp.responses.forEach((r, idx) => {
       if (!r.success) {
-        console.log("❌ FCM send error:", r.error?.code, r.error?.message);
+        console.log("❌ FCM send error token:", chunk[idx]);
+        console.log("❌ code:", r.error?.code);
+        console.log("❌ message:", r.error?.message);
 
         const code = r.error?.code;
         if (
@@ -561,7 +494,9 @@ async function sendToUserIdsFCMAndSave({ userIds, title, body, data }) {
           code === "messaging/invalid-registration-token"
         ) {
           invalidSet.add(chunk[idx]);
-        }
+        }   
+        } else {
+        console.log("✅ FCM success token:", chunk[idx]);
       }
     });
   }
@@ -575,27 +510,48 @@ async function sendExcelAccessRequestCreatedNotification({
   siteId,
   requestId,
 }) {
-  const targetIdsRaw = await getAdminsAndSuperadminsForSite({
-    siteId,
-    creatorId: requesterId,
-  });
+  try {
+    const targetIdsRaw = await getAdminsAndSuperadminsForSite({
+      siteId,
+      creatorId: requesterId,
+    });
 
-  const userIds = [...new Set(targetIdsRaw)];
-  if (!userIds.length) return;
+    const userIds = [...new Set(targetIdsRaw)].map(Number).filter(Boolean);
+    if (!userIds.length) return console.log("❌ No target users (excel_access_request)");
 
-  const msg = buildExcelAccessCreatedMessage({ requesterName });
+    const msg = buildExcelAccessCreatedMessage({ requesterName });
 
-  await sendToUserIdsFCMAndSave({
-    userIds,
-    title: msg.title,
-    body: msg.body,
-    data: {
-      type: "excel_access_request",
-      excel_access_request_id: requestId,
-      site_id: siteId,
-      requester_user_id: requesterId,
-    },
-  });
+    await saveNotifications({
+      userIds,
+      title: msg.title,
+      body: msg.body,
+      data: {
+        type: "excel_access_request",
+        excel_access_request_id: requestId,
+        site_id: siteId,
+        requester_user_id: requesterId,
+      },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (excel_access_request)");
+
+    await sendFcmMulticastWithCleanup({
+      tokens,
+      title: msg.title,
+      body: msg.body,
+      data: {
+        type: "excel_access_request",
+        excel_access_request_id: requestId,
+        site_id: siteId,
+        requester_user_id: requesterId,
+        title: msg.title,
+        body: msg.body,
+      },
+    });
+  } catch (err) {
+    console.error("❌ ERROR SEND EXCEL ACCESS REQUEST NOTIFICATION:", err);
+  }
 }
 
 async function sendExcelAccessDecisionNotification({
@@ -606,23 +562,129 @@ async function sendExcelAccessDecisionNotification({
   decidedByName,
   rejectReason,
 }) {
-  const msg = buildExcelAccessDecisionMessage({
-    approved,
-    decidedByName,
-    rejectReason,
-  });
+  try {
+    const userIds = [Number(requesterId)].filter(Boolean);
+    if (!userIds.length) return console.log("❌ Invalid requesterId (excel_access_decision)");
 
-  await sendToUserIdsFCMAndSave({
-    userIds: [Number(requesterId)],
-    title: msg.title,
-    body: msg.body,
-    data: {
-      type: "excel_access_decision",
-      excel_access_request_id: requestId,
-      site_id: siteId,
-      approved: approved ? "1" : "0",
-    },
-  });
+    const msg = buildExcelAccessDecisionMessage({
+      approved,
+      decidedByName,
+      rejectReason,
+    });
+
+    await saveNotifications({
+      userIds,
+      title: msg.title,
+      body: msg.body,
+      data: {
+        type: "excel_access_decision",
+        excel_access_request_id: requestId,
+        site_id: siteId,
+        approved: approved ? 1 : 0,
+      },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (excel_access_decision)");
+
+    await sendFcmMulticastWithCleanup({
+      tokens,
+      title: msg.title,
+      body: msg.body,
+      data: {
+        type: "excel_access_decision",
+        excel_access_request_id: requestId,
+        site_id: siteId,
+        approved: approved ? 1 : 0,
+        title: msg.title,
+        body: msg.body,
+      },
+    });
+  } catch (err) {
+    console.error("❌ ERROR SEND EXCEL ACCESS DECISION NOTIFICATION:", err);
+  }
+}
+
+async function sendExcelAccessRevokedNotification({
+  requesterId,
+  siteId,
+  revokedByName,
+}) {
+  try {
+    const userIds = [Number(requesterId)].filter(Boolean);
+    if (!userIds.length) return console.log("❌ Invalid requesterId (excel_access_revoked)");
+
+    const title = "⚠️ Akses Excel Dicabut";
+    const body = `Akses export Excel P5M kamu telah dinonaktifkan oleh ${revokedByName || "Admin"}. Jika perlu, silakan ajukan ulang izin akses.`;
+
+    await saveNotifications({
+      userIds,
+      title,
+      body,
+      data: {
+        type: "excel_access_revoked",
+        site_id: siteId,
+      },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (excel_access_revoked)");
+
+    await sendFcmMulticastWithCleanup({
+      tokens,
+      title,
+      body,
+      data: {
+        type: "excel_access_revoked",
+        site_id: siteId,
+        title,
+        body,
+      },
+    });
+  } catch (err) {
+    console.error("❌ ERROR SEND EXCEL ACCESS REVOKED NOTIFICATION:", err);
+  }
+}
+
+async function sendExcelAccessGrantedNotification({
+  requesterId,
+  siteId,
+  grantedByName,
+}) {
+  try {
+    const userIds = [Number(requesterId)].filter(Boolean);
+    if (!userIds.length) return console.log("❌ Invalid requesterId (excel_access_granted)");
+
+    const title = "✅ Akses Excel Diaktifkan";
+    const body = `Akses export Excel P5M kamu telah diaktifkan oleh ${grantedByName || "Admin"}. Sekarang kamu bisa melihat P5M Results dan export Excel kembali.`;
+
+    await saveNotifications({
+      userIds,
+      title,
+      body,
+      data: {
+        type: "excel_access_granted",
+        site_id: siteId,
+      },
+    });
+
+    const tokens = await getFcmTokensByUserIds(userIds);
+    if (!tokens.length) return console.log("❌ No tokens (excel_access_granted)");
+
+    await sendFcmMulticastWithCleanup({
+      tokens,
+      title,
+      body,
+      data: {
+        type: "excel_access_granted",
+        site_id: siteId,
+        title,
+        body,
+      },
+    });
+  } catch (err) {
+    console.error("❌ ERROR SEND EXCEL ACCESS GRANTED NOTIFICATION:", err);
+  }
 }
 
 module.exports = {

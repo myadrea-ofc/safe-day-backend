@@ -393,8 +393,8 @@ infoCell.value =
   const row = result.rows[i];
 
   const fotoUrl = row.foto_path
-  ? `${publicBaseUrl}/uploads/${row.foto_path}`
-  : null;
+    ? `${publicBaseUrl}/uploads/${encodeURIComponent(row.foto_path)}`
+    : null;
 
   const excelRow = worksheet.addRow([
     i + 1,
