@@ -285,7 +285,7 @@ const fileName = `P5M_${Date.now()}.xlsx`;
         { key: "umpan_balik", width: 30 },
         { key: "created_at", width: 22 },
         { key: "site_id", width: 10 },
-        { key: "foto_path", width: 28 },
+        { key: "foto_path", width: 80 },
       ];
 
       // ===== TITLE ROW =====
@@ -401,7 +401,7 @@ const fileName = `P5M_${Date.now()}.xlsx`;
       ? new Date(row.created_at).toLocaleString("id-ID")
       : "-",
     row.site_name ?? `Site ${row.site_id ?? "-"}`,
-    fotoUrl ? "Lihat Foto" : "-",
+    fotoUrl ?? "-",
   ]);
 
   excelRow.eachCell((cell, colNumber) => {
@@ -511,7 +511,7 @@ const fileName = `P5M_${Date.now()}.xlsx`;
   if (fotoUrl) {
     const fotoCell = excelRow.getCell(15);
     fotoCell.value = {
-      text: "Lihat Foto",
+      text: fotoUrl,
       hyperlink: fotoUrl,
     };
     fotoCell.font = {
