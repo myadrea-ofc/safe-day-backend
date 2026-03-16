@@ -213,7 +213,7 @@ exports.revokeAccess = async (req, res) => {
 // ==============================
 exports.deleteAccess = async (req, res) => {
   try {
-    const { role, site_id: adminSiteId } = req.user;
+    const { role, site_id: adminSiteId, name } = req.user;
     const { user_id, site_id } = req.body;
 
     if (role !== "admin" && role !== "superadmin") {
@@ -259,7 +259,15 @@ exports.deleteAccess = async (req, res) => {
       return res.status(404).json({ message: "Access not found" });
     }
 
+    // 🔔 KIRIM NOTIF REVOKE
+    await sendExcelAccessRevokedNotification({
+      requesterId: user_id,
+      siteId: site_id,
+      revokedByName: name || "Admin",
+    });
+
     return res.json({ message: "Access deleted" });
+
   } catch (err) {
     console.error("DELETE ACCESS ERROR:", err);
     return res.status(500).json({ message: "Delete failed" });
