@@ -49,7 +49,13 @@ FROM excel_download_access e
 // ==============================
 exports.grantAccess = async (req, res) => {
   try {
-    const { role, site_id: adminSiteId, id: grantedBy, name: grantedByName } = req.user;
+    const {
+      role,
+      site_id: adminSiteId,
+      id: grantedBy,
+      name: grantedByName,
+    } = req.user;
+
     const { user_id, site_id } = req.body;
 
     if (role !== "admin" && role !== "superadmin") {
@@ -61,7 +67,12 @@ exports.grantAccess = async (req, res) => {
     }
 
     const userCheck = await pool.query(
-      "SELECT id, site_id FROM users WHERE id = $1 AND deleted_at IS NULL",
+      `
+      SELECT id, site_id
+      FROM users
+      WHERE id = $1
+        AND deleted_at IS NULL
+      `,
       [user_id]
     );
 
@@ -71,32 +82,52 @@ exports.grantAccess = async (req, res) => {
 
     const targetUser = userCheck.rows[0];
 
-    if (role === "admin" && Number(targetUser.site_id) !== Number(adminSiteId)) {
+    if (
+      role === "admin" &&
+      Number(targetUser.site_id) !== Number(adminSiteId)
+    ) {
       return res.status(403).json({ message: "User not in your site" });
     }
 
-    await pool.query(
+    // kalau pernah ada row revoked lama, biarkan.
+    // kita fokus ke row aktif/nonaktif (revoked_at IS NULL)
+    const existing = await pool.query(
       `
-      UPDATE excel_download_access
-      SET revoked_at = NOW(),
-          updated_at = NOW(),
-          can_download = false
+      SELECT id, can_download
+      FROM excel_download_access
       WHERE user_id = $1
         AND site_id = $2
         AND revoked_at IS NULL
+      LIMIT 1
       `,
       [user_id, site_id]
     );
 
-    await pool.query(
-      `
-      INSERT INTO excel_download_access
-        (user_id, site_id, can_download, granted_by, created_at, updated_at, seen_by_admin, revoked_at)
-      VALUES
-        ($1, $2, true, $3, NOW(), NOW(), $4, NULL)
-      `,
-      [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
-    );
+    if (existing.rowCount > 0) {
+      await pool.query(
+        `
+        UPDATE excel_download_access
+        SET can_download = true,
+            granted_by = $3,
+            updated_at = NOW(),
+            seen_by_admin = $4
+        WHERE user_id = $1
+          AND site_id = $2
+          AND revoked_at IS NULL
+        `,
+        [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
+      );
+    } else {
+      await pool.query(
+        `
+        INSERT INTO excel_download_access
+          (user_id, site_id, can_download, granted_by, created_at, updated_at, seen_by_admin, revoked_at)
+        VALUES
+          ($1, $2, true, $3, NOW(), NOW(), $4, NULL)
+        `,
+        [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
+      );
+    }
 
     await sendExcelAccessGrantedNotification({
       requesterId: user_id,
@@ -106,7 +137,7 @@ exports.grantAccess = async (req, res) => {
 
     return res.json({ message: "Access granted" });
   } catch (err) {
-    console.error(err);
+    console.error("GRANT ACCESS ERROR:", err);
     return res.status(500).json({ message: "Grant failed" });
   }
 };
@@ -126,13 +157,6 @@ exports.revokeAccess = async (req, res) => {
     if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
-
-    console.log("🔒 REVOKE ACCESS:", {
-  user_id,
-  site_id,
-  revokedByName,
-  role,
-});
 
     const targetUserRes = await pool.query(
       `
@@ -157,9 +181,8 @@ exports.revokeAccess = async (req, res) => {
     const revokeRes = await pool.query(
       `
       UPDATE excel_download_access
-      SET revoked_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP,
-          can_download = false
+      SET can_download = false,
+          updated_at = CURRENT_TIMESTAMP
       WHERE user_id = $1
         AND site_id = $2
         AND revoked_at IS NULL
@@ -169,7 +192,7 @@ exports.revokeAccess = async (req, res) => {
     );
 
     if (revokeRes.rowCount === 0) {
-      return res.status(404).json({ message: "Access not found or already revoked" });
+      return res.status(404).json({ message: "Access not found" });
     }
 
     await sendExcelAccessRevokedNotification({
@@ -178,10 +201,68 @@ exports.revokeAccess = async (req, res) => {
       revokedByName,
     });
 
-    res.json({ message: "Access revoked" });
+    return res.json({ message: "Access disabled" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Revoke failed" });
+    console.error("REVOKE ACCESS ERROR:", err);
+    return res.status(500).json({ message: "Revoke failed" });
+  }
+};
+
+// ==============================
+// DELETE ACCESS (HAPUS RECORD)
+// ==============================
+exports.deleteAccess = async (req, res) => {
+  try {
+    const { role, site_id: adminSiteId } = req.user;
+    const { user_id, site_id } = req.body;
+
+    if (role !== "admin" && role !== "superadmin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
+      return res.status(403).json({ message: "Admin only for own site" });
+    }
+
+    const targetUserRes = await pool.query(
+      `
+      SELECT id, site_id
+      FROM users
+      WHERE id = $1
+        AND deleted_at IS NULL
+      `,
+      [user_id]
+    );
+
+    if (targetUserRes.rowCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const targetUser = targetUserRes.rows[0];
+
+    if (role === "admin" && Number(targetUser.site_id) !== Number(adminSiteId)) {
+      return res.status(403).json({ message: "User not in your site" });
+    }
+
+    const delRes = await pool.query(
+      `
+      DELETE FROM excel_download_access
+      WHERE user_id = $1
+        AND site_id = $2
+        AND revoked_at IS NULL
+      RETURNING id
+      `,
+      [user_id, site_id]
+    );
+
+    if (delRes.rowCount === 0) {
+      return res.status(404).json({ message: "Access not found" });
+    }
+
+    return res.json({ message: "Access deleted" });
+  } catch (err) {
+    console.error("DELETE ACCESS ERROR:", err);
+    return res.status(500).json({ message: "Delete failed" });
   }
 };
 

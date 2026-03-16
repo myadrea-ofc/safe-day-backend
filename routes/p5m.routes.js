@@ -235,17 +235,19 @@ router.get(
 
       const result = await pool.query(query, params);
 
-const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+const publicBaseUrl =
+  process.env.PUBLIC_BASE_URL?.replace(/\/$/, "") ||
+  "http://safety.borneo.co.id";
 
-      const MAX_EXPORT_ROWS = 50000;
-      if (result.rows.length > MAX_EXPORT_ROWS) {
-        return res.status(400).json({
-          message: `Data terlalu besar (${result.rows.length} rows). Maksimal ${MAX_EXPORT_ROWS} rows.`,
-        });
-      }
+const MAX_EXPORT_ROWS = 50000;
+if (result.rows.length > MAX_EXPORT_ROWS) {
+  return res.status(400).json({
+    message: `Data terlalu besar (${result.rows.length} rows). Maksimal ${MAX_EXPORT_ROWS} rows.`,
+  });
+}
 
-      const now = new DatepublicBaseUrl();
-      const fileName = `P5M_${Date.now()}.xlsx`;
+const now = new Date();
+const fileName = `P5M_${Date.now()}.xlsx`;
 
       res.setHeader(
         "Content-Type",

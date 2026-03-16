@@ -8,6 +8,7 @@ const allowRoles = require("../middlewares/role.middleware"); // pastikan ada
 router.get("/", auth, controller.getAccessList);
 router.post("/grant", auth, controller.grantAccess);
 router.post("/revoke", auth, controller.revokeAccess);
+router.post("/delete", auth, controller.deleteAccess);
 router.get("/unseen-count", auth, controller.getUnseenCount);
 router.post("/mark-seen", auth, controller.markSeen);
 
