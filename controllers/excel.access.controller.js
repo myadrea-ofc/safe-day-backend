@@ -3,6 +3,7 @@ const {
   sendExcelAccessRevokedNotification,
   sendExcelAccessGrantedNotification,
 } = require("../services/notification.services");
+const { EXCEL_FEATURES } = require("../constants/excel.features");
 
 // ==============================
 // GET LIST ACCESS
@@ -19,6 +20,7 @@ exports.getAccessList = async (req, res) => {
   e.site_id,
   s.site_name,
   e.can_download,
+  e.feature,
   e.seen_by_admin,
   e.created_at
 FROM excel_download_access e
@@ -57,6 +59,9 @@ exports.grantAccess = async (req, res) => {
     } = req.user;
 
     const { user_id, site_id } = req.body;
+const feature = String(req.body?.feature || "").toLowerCase().trim();
+
+    
 
     if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ message: "Forbidden" });
@@ -65,6 +70,10 @@ exports.grantAccess = async (req, res) => {
     if (role === "admin" && Number(site_id) !== Number(adminSiteId)) {
       return res.status(403).json({ message: "Admin only for own site" });
     }
+
+    if (!feature || !EXCEL_FEATURES.includes(feature)) {
+  return res.status(400).json({ message: "Feature tidak valid" });
+}
 
     const userCheck = await pool.query(
       `
@@ -94,38 +103,40 @@ exports.grantAccess = async (req, res) => {
     const existing = await pool.query(
       `
       SELECT id, can_download
-      FROM excel_download_access
-      WHERE user_id = $1
-        AND site_id = $2
-        AND revoked_at IS NULL
-      LIMIT 1
+FROM excel_download_access
+WHERE user_id = $1
+  AND site_id = $2
+  AND feature = $3
+  AND revoked_at IS NULL
+LIMIT 1
       `,
-      [user_id, site_id]
+      [user_id, site_id, feature]
     );
 
     if (existing.rowCount > 0) {
       await pool.query(
         `
         UPDATE excel_download_access
-        SET can_download = true,
-            granted_by = $3,
-            updated_at = NOW(),
-            seen_by_admin = $4
-        WHERE user_id = $1
-          AND site_id = $2
-          AND revoked_at IS NULL
+SET can_download = true,
+    granted_by = $4,
+    updated_at = NOW(),
+    seen_by_admin = $5
+WHERE user_id = $1
+  AND site_id = $2
+  AND feature = $3
+  AND revoked_at IS NULL
         `,
-        [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
+        [user_id, site_id, feature, grantedBy, role === "superadmin" ? false : true]
       );
     } else {
       await pool.query(
         `
         INSERT INTO excel_download_access
-          (user_id, site_id, can_download, granted_by, created_at, updated_at, seen_by_admin, revoked_at)
-        VALUES
-          ($1, $2, true, $3, NOW(), NOW(), $4, NULL)
+  (user_id, site_id, feature, can_download, granted_by, created_at, updated_at, seen_by_admin, revoked_at)
+VALUES
+  ($1, $2, $3, true, $4, NOW(), NOW(), $5, NULL)
         `,
-        [user_id, site_id, grantedBy, role === "superadmin" ? false : true]
+        [user_id, site_id, feature, grantedBy, role === "superadmin" ? false : true]
       );
     }
 
@@ -149,6 +160,12 @@ exports.revokeAccess = async (req, res) => {
   try {
     const { role, site_id: adminSiteId, name: revokedByName } = req.user;
     const { user_id, site_id } = req.body;
+
+    const feature = String(req.body?.feature || "").toLowerCase().trim();
+
+if (!feature || !EXCEL_FEATURES.includes(feature)) {
+  return res.status(400).json({ message: "Feature tidak valid" });
+}
 
     if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ message: "Forbidden" });
@@ -184,11 +201,12 @@ exports.revokeAccess = async (req, res) => {
       SET can_download = false,
           updated_at = CURRENT_TIMESTAMP
       WHERE user_id = $1
-        AND site_id = $2
-        AND revoked_at IS NULL
+  AND site_id = $2
+  AND feature = $3
+  AND revoked_at IS NULL
       RETURNING user_id, site_id
       `,
-      [user_id, site_id]
+      [user_id, site_id, feature]
     );
 
     if (revokeRes.rowCount === 0) {
@@ -215,6 +233,11 @@ exports.deleteAccess = async (req, res) => {
   try {
     const { role, site_id: adminSiteId, name } = req.user;
     const { user_id, site_id } = req.body;
+    const feature = String(req.body?.feature || "").toLowerCase().trim();
+
+    if (!feature || !EXCEL_FEATURES.includes(feature)) {
+  return res.status(400).json({ message: "Feature tidak valid" });
+}
 
     if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ message: "Forbidden" });
@@ -247,12 +270,13 @@ exports.deleteAccess = async (req, res) => {
     const delRes = await pool.query(
       `
       DELETE FROM excel_download_access
-      WHERE user_id = $1
-        AND site_id = $2
-        AND revoked_at IS NULL
+WHERE user_id = $1
+  AND site_id = $2
+  AND feature = $3
+  AND revoked_at IS NULL
       RETURNING id
       `,
-      [user_id, site_id]
+      [user_id, site_id, feature]
     );
 
     if (delRes.rowCount === 0) {
@@ -339,17 +363,24 @@ exports.getMyAccess = async (req, res) => {
   try {
     const { id: userId, site_id: siteId } = req.user;
 
+const feature = String(req.query.feature || "").toLowerCase().trim();
+
+if (!feature || !EXCEL_FEATURES.includes(feature)) {
+  return res.status(400).json({ message: "Feature tidak valid" });
+}
+
     const r = await pool.query(
       `
       SELECT can_download
-      FROM excel_download_access
-      WHERE user_id = $1
-        AND site_id = $2
-        AND revoked_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 1
+FROM excel_download_access
+WHERE user_id = $1
+  AND site_id = $2
+  AND feature = $3
+  AND revoked_at IS NULL
+ORDER BY created_at DESC
+LIMIT 1
       `,
-      [userId, siteId]
+      [userId, siteId, feature]
     );
 
     const can = r.rowCount > 0 ? r.rows[0].can_download === true : false;

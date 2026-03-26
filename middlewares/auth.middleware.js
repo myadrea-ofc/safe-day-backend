@@ -9,7 +9,6 @@ module.exports = async (req, res, next) => {
     return res.status(401).json({ message: "Token tidak ditemukan" });
   }
 
-  // 🔥 Tambahan: validasi format Bearer
   if (!authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Format token tidak valid" });
   }
