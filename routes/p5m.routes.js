@@ -170,29 +170,24 @@ router.get(
         `
         SELECT exported_at
         FROM export_logs
-        WHERE user_id = $1
+        WHERE user_id = $1 AND feature = $2
         ORDER BY exported_at DESC
         LIMIT 1
         `,
-        [req.user.id]
+        [req.user.id, "p5m"]
       );
 
-      if (lastExport.rowCount > 0) {
-        const lastTime = new Date(lastExport.rows[0].exported_at);
-        const now = new Date();
-        const generatedAtText = now.toLocaleString("id-ID", {
-  timeZone: "Asia/Jakarta",
-});
-        const diffSeconds = (now - lastTime) / 1000;
+     if (lastExport.rowCount > 0) {
+  const lastTime = new Date(lastExport.rows[0].exported_at);
+  const now = new Date();
+  const diffSeconds = (now - lastTime) / 1000;
 
-        if (diffSeconds < 10) {
-          return res.status(429).json({
-            message: `Tunggu ${Math.ceil(
-              10 - diffSeconds
-            )} detik sebelum export lagi.`,
-          });
-        }
-      }
+  if (diffSeconds < 10) {
+    return res.status(429).json({
+      message: `Tunggu ${Math.ceil(10 - diffSeconds)} detik sebelum export lagi.`,
+    });
+  }
+}
 
       const { start, end } = req.query;
 
@@ -577,10 +572,10 @@ router.get(
 
       await pool.query(
         `
-        INSERT INTO export_logs (user_id, site_id)
-        VALUES ($1, $2)
+        INSERT INTO export_logs (user_id, site_id, feature)
+        VALUES ($1, $2, $3)
         `,
-        [req.user.id, req.user.site_id]
+        [req.user.id, req.user.site_id, "p5m"]
       );
 
       await workbook.commit();

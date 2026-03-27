@@ -11,31 +11,39 @@ const { EXCEL_FEATURES } = require("../constants/excel.features");
 exports.getAccessList = async (req, res) => {
   try {
     const { role, site_id } = req.user;
+    const feature = String(req.query.feature || "").toLowerCase().trim();
 
     let query = `
       SELECT 
-  e.user_id,
-  u.name as user_name,
-  r.role_name,
-  e.site_id,
-  s.site_name,
-  e.can_download,
-  e.feature,
-  e.seen_by_admin,
-  e.created_at
-FROM excel_download_access e
+        e.user_id,
+        u.name as user_name,
+        r.role_name,
+        e.site_id,
+        s.site_name,
+        e.can_download,
+        e.feature,
+        e.seen_by_admin,
+        e.created_at
+      FROM excel_download_access e
       JOIN users u ON u.id = e.user_id
       JOIN roles r ON r.id = u.role_id
       JOIN sites s ON s.id = e.site_id
       WHERE e.revoked_at IS NULL
     `;
 
-    let params = [];
+    const params = [];
 
     if (role === "admin") {
-      query += ` AND e.site_id = $1`;
       params.push(site_id);
+      query += ` AND e.site_id = $${params.length}`;
     }
+
+    if (feature) {
+      params.push(feature);
+      query += ` AND LOWER(e.feature) = $${params.length}`;
+    }
+
+    query += ` ORDER BY e.created_at DESC`;
 
     const { rows } = await pool.query(query, params);
 
@@ -45,7 +53,6 @@ FROM excel_download_access e
     res.status(500).json({ message: "Failed to fetch access list" });
   }
 };
-
 // ==============================
 // GRANT ACCESS
 // ==============================
@@ -144,6 +151,7 @@ VALUES
       requesterId: user_id,
       siteId: site_id,
       grantedByName,
+      feature
     });
 
     return res.json({ message: "Access granted" });
@@ -217,6 +225,7 @@ if (!feature || !EXCEL_FEATURES.includes(feature)) {
       requesterId: user_id,
       siteId: site_id,
       revokedByName,
+      feature
     });
 
     return res.json({ message: "Access disabled" });
@@ -288,6 +297,7 @@ WHERE user_id = $1
       requesterId: user_id,
       siteId: site_id,
       revokedByName: name || "Admin",
+      feature
     });
 
     return res.json({ message: "Access deleted" });
@@ -304,24 +314,30 @@ WHERE user_id = $1
 exports.getUnseenCount = async (req, res) => {
   try {
     const { role, site_id } = req.user;
+    const feature = String(req.query.feature || "").toLowerCase().trim();
 
     if (role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const { rows } = await pool.query(
-      `
+    let query = `
       SELECT COUNT(*) 
       FROM excel_download_access
       WHERE site_id = $1
       AND seen_by_admin = false
       AND revoked_at IS NULL
-      `,
-      [site_id]
-    );
+    `;
 
-    res.json({ count: parseInt(rows[0].count) });
+    const params = [site_id];
 
+    if (feature) {
+      params.push(feature);
+      query += ` AND LOWER(feature) = $${params.length}`;
+    }
+
+    const { rows } = await pool.query(query, params);
+
+    res.json({ count: parseInt(rows[0].count, 10) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed" });
@@ -334,28 +350,34 @@ exports.getUnseenCount = async (req, res) => {
 exports.markSeen = async (req, res) => {
   try {
     const { role, site_id } = req.user;
+    const feature = String(req.query.feature || "").toLowerCase().trim();
 
     if (role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    await pool.query(
-      `
+    let query = `
       UPDATE excel_download_access
       SET seen_by_admin = true
       WHERE site_id = $1
-      `,
-      [site_id]
-    );
+      AND revoked_at IS NULL
+    `;
+
+    const params = [site_id];
+
+    if (feature) {
+      params.push(feature);
+      query += ` AND LOWER(feature) = $${params.length}`;
+    }
+
+    await pool.query(query, params);
 
     res.json({ message: "Marked as seen" });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed" });
   }
 };
-
 // ==============================
 // GET MY ACCESS (MEMBER)
 // ==============================

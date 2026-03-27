@@ -94,6 +94,19 @@ async function getTargetUsersForLpi({ siteId, creatorId }) {
   return result.rows.map((r) => r.id);
 }
 
+function getExcelFeatureLabel(feature) {
+  const key = String(feature || "").toLowerCase();
+
+  switch (key) {
+    case "p5m":
+      return "P5M";
+    case "lpi":
+      return "LPI";
+    default:
+      return key ? key.toUpperCase() : "Excel";
+  }
+}
+
 /* ================== SAVE NOTIFICATIONS ================== */
 async function saveNotifications({ userIds, title, body, data }) {
   if (!userIds.length) return;
@@ -431,24 +444,37 @@ async function getAdminsAndSuperadminsForSite({ siteId, creatorId }) {
   return result.rows.map((r) => r.id);
 }
 
-function buildExcelAccessCreatedMessage({ requesterName }) {
+function buildExcelAccessCreatedMessage({ requesterName, feature }) {
+  const featureLabel = getExcelFeatureLabel(feature);
+
   return {
-    title: "📄 Permintaan Akses Excel P5M",
-    body: `👤 ${requesterName || "Member"} meminta izin export Excel P5M. Tap untuk review.`,
+    title: `📄 Permintaan Akses Excel ${featureLabel}`,
+    body: `👤 ${requesterName || "Member"} meminta izin export Excel ${featureLabel}. Tap untuk review.`,
   };
 }
 
-function buildExcelAccessDecisionMessage({ approved, decidedByName, rejectReason }) {
+function buildExcelAccessDecisionMessage({
+  approved,
+  decidedByName,
+  rejectReason,
+  feature,
+}) {
+  const featureLabel = getExcelFeatureLabel(feature);
+
   if (approved) {
     return {
       title: "✅ Akses Excel Disetujui",
-      body: `🎉 Permintaanmu disetujui oleh ${decidedByName || "Admin"}. Sekarang kamu bisa export Excel P5M.`,
+      body: `🎉 Permintaanmu untuk export Excel ${featureLabel} disetujui oleh ${
+        decidedByName || "Admin"
+      }.`,
     };
   }
 
   return {
     title: "❌ Akses Excel Ditolak",
-    body: `Permintaanmu ditolak oleh ${decidedByName || "Admin"}${rejectReason ? `. Alasan: ${rejectReason}` : ""}`,
+    body: `Permintaanmu untuk export Excel ${featureLabel} ditolak oleh ${
+      decidedByName || "Admin"
+    }${rejectReason ? `. Alasan: ${rejectReason}` : ""}`,
   };
 }
 
@@ -509,6 +535,7 @@ async function sendExcelAccessRequestCreatedNotification({
   requesterName,
   siteId,
   requestId,
+  feature,
 }) {
   try {
     const targetIdsRaw = await getAdminsAndSuperadminsForSite({
@@ -519,7 +546,7 @@ async function sendExcelAccessRequestCreatedNotification({
     const userIds = [...new Set(targetIdsRaw)].map(Number).filter(Boolean);
     if (!userIds.length) return console.log("❌ No target users (excel_access_request)");
 
-    const msg = buildExcelAccessCreatedMessage({ requesterName });
+    const msg = buildExcelAccessCreatedMessage({ requesterName, feature });
 
     await saveNotifications({
       userIds,
@@ -530,6 +557,7 @@ async function sendExcelAccessRequestCreatedNotification({
         excel_access_request_id: requestId,
         site_id: siteId,
         requester_user_id: requesterId,
+        feature,
       },
     });
 
@@ -545,6 +573,7 @@ async function sendExcelAccessRequestCreatedNotification({
         excel_access_request_id: requestId,
         site_id: siteId,
         requester_user_id: requesterId,
+        feature,
         title: msg.title,
         body: msg.body,
       },
@@ -561,6 +590,7 @@ async function sendExcelAccessDecisionNotification({
   approved,
   decidedByName,
   rejectReason,
+  feature,
 }) {
   try {
     const userIds = [Number(requesterId)].filter(Boolean);
@@ -570,6 +600,7 @@ async function sendExcelAccessDecisionNotification({
       approved,
       decidedByName,
       rejectReason,
+      feature,
     });
 
     await saveNotifications({
@@ -581,6 +612,7 @@ async function sendExcelAccessDecisionNotification({
         excel_access_request_id: requestId,
         site_id: siteId,
         approved: approved ? 1 : 0,
+        feature,
       },
     });
 
@@ -596,6 +628,7 @@ async function sendExcelAccessDecisionNotification({
         excel_access_request_id: requestId,
         site_id: siteId,
         approved: approved ? 1 : 0,
+        feature,
         title: msg.title,
         body: msg.body,
       },
@@ -609,13 +642,17 @@ async function sendExcelAccessRevokedNotification({
   requesterId,
   siteId,
   revokedByName,
+  feature,
 }) {
   try {
     const userIds = [Number(requesterId)].filter(Boolean);
     if (!userIds.length) return console.log("❌ Invalid requesterId (excel_access_revoked)");
 
+    const featureLabel = getExcelFeatureLabel(feature);
     const title = "⚠️ Akses Excel Dicabut";
-    const body = `Akses export Excel P5M kamu telah dinonaktifkan oleh ${revokedByName || "Admin"}. Jika perlu, silakan ajukan ulang izin akses.`;
+    const body = `Akses export Excel ${featureLabel} kamu telah dinonaktifkan oleh ${
+      revokedByName || "Admin"
+    }. Jika perlu, silakan ajukan ulang izin akses.`;
 
     await saveNotifications({
       userIds,
@@ -624,6 +661,7 @@ async function sendExcelAccessRevokedNotification({
       data: {
         type: "excel_access_revoked",
         site_id: siteId,
+        feature,
       },
     });
 
@@ -637,6 +675,7 @@ async function sendExcelAccessRevokedNotification({
       data: {
         type: "excel_access_revoked",
         site_id: siteId,
+        feature,
         title,
         body,
       },
@@ -650,13 +689,17 @@ async function sendExcelAccessGrantedNotification({
   requesterId,
   siteId,
   grantedByName,
+  feature,
 }) {
   try {
     const userIds = [Number(requesterId)].filter(Boolean);
     if (!userIds.length) return console.log("❌ Invalid requesterId (excel_access_granted)");
 
+    const featureLabel = getExcelFeatureLabel(feature);
     const title = "✅ Akses Excel Diaktifkan";
-    const body = `Akses export Excel P5M kamu telah diaktifkan oleh ${grantedByName || "Admin"}. Sekarang kamu bisa melihat P5M Results dan export Excel kembali.`;
+    const body = `Akses export Excel ${featureLabel} kamu telah diaktifkan oleh ${
+      grantedByName || "Admin"
+    }. Sekarang kamu bisa export Excel ${featureLabel} kembali.`;
 
     await saveNotifications({
       userIds,
@@ -665,6 +708,7 @@ async function sendExcelAccessGrantedNotification({
       data: {
         type: "excel_access_granted",
         site_id: siteId,
+        feature,
       },
     });
 
@@ -678,6 +722,7 @@ async function sendExcelAccessGrantedNotification({
       data: {
         type: "excel_access_granted",
         site_id: siteId,
+        feature,
         title,
         body,
       },

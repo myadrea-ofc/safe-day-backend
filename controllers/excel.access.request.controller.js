@@ -56,12 +56,12 @@ RETURNING id, requester_user_id, site_id, feature, status, requested_at
     const row = insert.rows[0];
 
     await sendExcelAccessRequestCreatedNotification({
-      requesterId,
-      requesterName: req.user.name,
-      siteId,
-      requestId: row.id,
-    });
-
+  requesterId,
+  requesterName: req.user.name,
+  siteId,
+  requestId: row.id,
+  feature: row.feature,
+});
     return res.status(201).json(row);
   } catch (err) {
     if (String(err?.code) === "23505") {
@@ -144,8 +144,9 @@ exports.getMyLatestRequest = async (req, res) => {
 exports.listRequests = async (req, res) => {
   try {
     const { role, site_id: mySiteId } = req.user;
-    const status = (req.query.status || "pending").toString();
+    const status = (req.query.status || "pending").toString().trim();
     const q = (req.query.q || "").toString().trim();
+    const feature = (req.query.feature || "").toString().toLowerCase().trim();
 
     const params = [status];
     let where = `WHERE r.status = $1`;
@@ -157,40 +158,57 @@ exports.listRequests = async (req, res) => {
       where += ` AND r.site_id = $${idx}`;
     }
 
+    if (feature) {
+      if (!EXCEL_FEATURES.includes(feature)) {
+        return res.status(400).json({ message: "Feature tidak valid" });
+      }
+
+      idx++;
+      params.push(feature);
+      where += ` AND LOWER(r.feature) = $${idx}`;
+    }
+
     if (q) {
       idx++;
       params.push(`%${q.toLowerCase()}%`);
-      where += ` AND LOWER(u.name) LIKE $${idx}`;
+      where += `
+        AND (
+          LOWER(u.name) LIKE $${idx}
+          OR LOWER(COALESCE(d.department_name, '')) LIKE $${idx}
+          OR LOWER(COALESCE(s.site_name, '')) LIKE $${idx}
+          OR LOWER(COALESCE(r.feature, '')) LIKE $${idx}
+        )
+      `;
     }
 
     const result = await pool.query(
-  `
-  SELECT
-  r.id,
-  r.requester_user_id,
-  r.site_id,
-  r.feature,
-  r.status,
-  r.requested_at,
-    r.decided_at,
-    r.reject_reason,
-    r.requester_user_id,
-    u.name AS requester_name,
-    d.department_name,
-    r.decided_by_user_id,
-    decider.name AS decided_by_name,
-    decider_role.role_name AS decided_by_role
-  FROM excel_access_requests r
-  JOIN users u ON u.id = r.requester_user_id
-  LEFT JOIN departments d ON d.id = u.department_id
-  LEFT JOIN sites s ON s.id = r.site_id
-  LEFT JOIN users decider ON decider.id = r.decided_by_user_id
-  LEFT JOIN roles decider_role ON decider_role.id = decider.role_id
-  ${where}
-  ORDER BY r.requested_at DESC
-  `,
-  params
-);
+      `
+      SELECT
+        r.id,
+        r.requester_user_id,
+        r.site_id,
+        r.feature,
+        r.status,
+        r.requested_at,
+        r.decided_at,
+        r.reject_reason,
+        u.name AS requester_name,
+        d.department_name,
+        s.site_name,
+        r.decided_by_user_id,
+        decider.name AS decided_by_name,
+        decider_role.role_name AS decided_by_role
+      FROM excel_access_requests r
+      JOIN users u ON u.id = r.requester_user_id
+      LEFT JOIN departments d ON d.id = u.department_id
+      LEFT JOIN sites s ON s.id = r.site_id
+      LEFT JOIN users decider ON decider.id = r.decided_by_user_id
+      LEFT JOIN roles decider_role ON decider_role.id = decider.role_id
+      ${where}
+      ORDER BY r.requested_at DESC
+      `,
+      params
+    );
 
     return res.json(result.rows);
   } catch (err) {
@@ -260,16 +278,15 @@ FOR UPDATE
 
     await client.query("COMMIT");
 
-    await sendExcelAccessDecisionNotification({
-      requesterId: r.requester_user_id,
-      siteId: r.site_id,
-      requestId,
-      approved: true,
-      feature,
-      decidedByName: req.user.name,
-      rejectReason: null,
-    });
-
+ await sendExcelAccessDecisionNotification({
+  requesterId: r.requester_user_id,
+  siteId: r.site_id,
+  requestId,
+  approved: true,
+  feature: r.feature,
+  decidedByName: req.user.name,
+  rejectReason: null,
+});
     return res.json(upd.rows[0]);
   } catch (err) {
     await client.query("ROLLBACK");
