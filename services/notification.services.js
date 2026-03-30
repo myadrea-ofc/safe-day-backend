@@ -102,6 +102,8 @@ function getExcelFeatureLabel(feature) {
       return "P5M";
     case "lpi":
       return "LPI";
+      case "hazard":
+      return "Hazard";
     default:
       return key ? key.toUpperCase() : "Excel";
   }
