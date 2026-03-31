@@ -2,7 +2,7 @@ const EXCEL_FEATURES = [
   "p5m",
   "lpi",
   "hazard",
-  "inspeksi_a",
+  "inspeksi_chp",
   "inspeksi_b",
   "inspeksi_c",
   "p2h_a",

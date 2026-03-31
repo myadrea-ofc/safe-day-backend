@@ -418,7 +418,7 @@ router.get(
       ];
 
       // ===== TITLE ROW =====
-      worksheet.mergeCells("A1:AD1");
+      worksheet.mergeCells("A1:Y1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "LAPORAN EXPORT LPI";
       titleCell.font = {
@@ -439,7 +439,7 @@ router.get(
       worksheet.getRow(1).height = 28;
 
       // ===== INFO ROW =====
-      worksheet.mergeCells("A2:AD2");
+      worksheet.mergeCells("A2:Y2");
       const infoCell = worksheet.getCell("A2");
       let currentUserSiteName = "-";
 
@@ -591,10 +591,6 @@ router.get(
           "",
           "",
           "",
-          "",
-          "",
-          "",
-          "",
         ]);
 
         excelRow.eachCell((cell, colNumber) => {
@@ -663,7 +659,7 @@ router.get(
         }
 
         // hyperlink foto 1..10
-        for (let j = 0; j < 10; j++) {
+        for (let j = 0; j < 5; j++) {
           const foto = fotoList[j];
           const fotoCell = excelRow.getCell(21 + j);
 
@@ -748,15 +744,13 @@ router.get(
 
       worksheet.commit();
 
-      await pool.query(
-        `
-        INSERT INTO export_logs (user_id, site_id, feature)
-        VALUES ($1, $2, $3)
-        `,
-        [req.user.id, req.user.site_id, "lpi"]
-      );
-
       await workbook.commit();
+
+await pool.query(`
+  INSERT INTO export_logs (user_id, site_id, feature)
+  VALUES ($1, $2, $3)
+`, [req.user.id, req.user.site_id, "lpi"]);
+
     } catch (err) {
       console.error("EXPORT XLSX ERROR:", err);
 
