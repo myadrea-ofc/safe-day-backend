@@ -125,14 +125,22 @@ router.get(
   allowRoles("admin", "superadmin"),
   async (req, res) => {
     try {
-      const { site_id, department_id, search = "", limit = 50, offset = 0 } = req.query;
+      const {
+        site_id,
+        department_id,
+        search = "",
+        limit = 50,
+        offset = 0,
+        role_name,
+        exclude_user_id,
+      } = req.query;
 
       if (!department_id) {
         return res.status(400).json({ message: "Department wajib dipilih" });
       }
 
       let sql = `
-        SELECT u.id, u.name
+        SELECT u.id, u.name, r.role_name
         FROM users u
         JOIN roles r ON u.role_id = r.id
         WHERE u.department_id = $1
@@ -141,7 +149,7 @@ router.get(
 
       const params = [department_id];
 
-      // 🔒 Site filtering
+      // Site filtering
       if (req.user.role === "superadmin") {
         if (site_id) {
           params.push(site_id);
@@ -152,13 +160,23 @@ router.get(
         sql += ` AND u.site_id = $${params.length}`;
       }
 
-      // 🔒 ADMIN tidak boleh lihat superadmin
-      if (req.user.role !== "superadmin") {
+      // filter role hanya jika diminta oleh frontend
+      if (role_name) {
+        params.push(String(role_name).toLowerCase());
+        sql += ` AND LOWER(r.role_name) = $${params.length}`;
+      } else if (req.user.role !== "superadmin") {
+        // perilaku lama tetap dipertahankan
         params.push("superadmin");
-        sql += ` AND r.role_name != $${params.length}`;
+        sql += ` AND LOWER(r.role_name) != $${params.length}`;
       }
 
-      // 🔍 Search
+      // exclude user tertentu hanya jika diminta oleh frontend
+      if (exclude_user_id) {
+        params.push(Number(exclude_user_id));
+        sql += ` AND u.id <> $${params.length}`;
+      }
+
+      // Search
       if (search) {
         params.push(`%${search.toLowerCase()}%`);
         sql += ` AND LOWER(u.name) LIKE $${params.length}`;
