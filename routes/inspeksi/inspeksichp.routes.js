@@ -9,8 +9,7 @@ const ExcelJS = require("exceljs");
 // === MULTER ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
@@ -196,7 +195,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 router.get("/", authMiddleware, async (req, res) => {
@@ -280,7 +279,7 @@ router.get(
         ORDER BY exported_at DESC
         LIMIT 1
         `,
-        [req.user.id, "inspeksi_chp"]
+        [req.user.id, "inspeksi_chp"],
       );
 
       if (lastExport.rowCount > 0) {
@@ -377,15 +376,22 @@ router.get(
       }
 
       const now = new Date();
-      const fileName = `INSPEKSI_CHP_${Date.now()}.xlsx`;
+
+      const formattedDate = now
+        .toLocaleDateString("id-ID", {
+          timeZone: "Asia/Jakarta",
+        })
+        .replace(/\//g, "-");
+
+      const fileName = `INSPEKSI_CHP_${formattedDate}.xlsx`;
 
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}"`
+        `attachment; filename="${fileName}"`,
       );
 
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -464,7 +470,22 @@ router.get(
         { key: "foto_4", width: 18 },
       ];
 
-      worksheet.mergeCells("A1:AK1");
+      function getExcelColumnName(columnNumber) {
+        let dividend = columnNumber;
+        let columnName = "";
+
+        while (dividend > 0) {
+          const modulo = (dividend - 1) % 26;
+          columnName = String.fromCharCode(65 + modulo) + columnName;
+          dividend = Math.floor((dividend - modulo) / 26);
+        }
+
+        return columnName;
+      }
+
+      const lastColumnLetter = getExcelColumnName(worksheet.columns.length);
+
+      worksheet.mergeCells(`A1:${lastColumnLetter}1`);
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "LAPORAN EXPORT INSPEKSI CHP";
       titleCell.font = {
@@ -484,14 +505,14 @@ router.get(
       };
       worksheet.getRow(1).height = 28;
 
-      worksheet.mergeCells("A2:AK2");
+      worksheet.mergeCells(`A2:${lastColumnLetter}2`);
       const infoCell = worksheet.getCell("A2");
       let currentUserSiteName = "-";
 
       if (req.user.site_id) {
         const siteRes = await pool.query(
           `SELECT site_name FROM sites WHERE id = $1 LIMIT 1`,
-          [req.user.site_id]
+          [req.user.site_id],
         );
 
         if (siteRes.rowCount > 0) {
@@ -541,26 +562,26 @@ router.get(
         "Tanggal Inspeksi",
         "Jumlah Inspektor",
 
-        "Opsi 1",
-        "Opsi 2",
-        "Opsi 3",
-        "Opsi 4",
-        "Opsi 5",
-        "Opsi 6",
-        "Opsi 7",
-        "Opsi 8",
-        "Opsi 9",
-        "Opsi 10",
-        "Opsi 11",
-        "Opsi 12",
-        "Opsi 13",
-        "Opsi 14",
-        "Opsi 15",
-        "Opsi 16",
-        "Opsi 17",
-        "Opsi 18",
-        "Opsi 19",
-        "Opsi 20",
+        "Tanah dalam kondisi baik : Dataran tinggi / tebing / landasan",
+        "Housekeeping dilaksanakan sepanjang conveyor & di katrol belakang",
+        "Pelindung mesin tersedia di katrol depan / katrol belakang / Motors / Peluncur / dll",
+        "Conveyor tersedia penahan mundur (reverse)",
+        "Jalur & tempat berjalan aman",
+        "Tersedia penutup belt (kerudung)",
+        "Tersedia alat LOTO & tanda bahaya",
+        "Tersedia Saklar Emergency Trip & Kawat Trip",
+        "Tersedia Saklar Pembatas Trip",
+        "Praktek penumpukan & penyimpanan aman",
+        "Tersedia rambu-rambu, peringatan & kode warna",
+        "Rollers & Idlers semua bekerja",
+        "Keadaan bidang luncur / penampungan tumpahan dalam kondisi baik",
+        "Sambungan belt aman & dalam keadaan baik",
+        "Belt bertumpu secara benar",
+        "APD (Pelindung Telinga / Masker Debu / Sarung Tangan) tersedia",
+        "Kotak listrik / saklar penggerak / kabel dalam kondisi baik",
+        "Penyiraman Air (dimana diperlukan) & pengendalian debu dilaksanakan",
+        "Tersedia pemadam api & di inspeksi",
+        "Tersedia peringatan untuk Start Up",
 
         "Keterangan Hasil",
         "Saran Masuk",
@@ -573,7 +594,7 @@ router.get(
         "Foto 4",
       ]);
 
-      headerRow.height = 24;
+      headerRow.height = 40;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -691,10 +712,12 @@ router.get(
           const foto = fotoFields[j];
           const fotoCell = excelRow.getCell(33 + j);
 
+          const baseUrl = (process.env.PUBLIC_BASE_URL || "").replace(
+            /\/$/,
+            "",
+          );
           if (foto) {
-            const fotoUrl = `http://safety.borneo.co.id/uploads/${encodeURIComponent(
-              foto
-            )}`;
+            const fotoUrl = `${baseUrl}/uploads/${encodeURIComponent(foto)}`;
 
             fotoCell.value = {
               text: `Lihat Foto ${j + 1}`,
@@ -747,7 +770,8 @@ router.get(
         } else if (
           statusValue.includes("sesuai") ||
           statusValue.includes("aman") ||
-          statusValue.includes("baik")
+          statusValue.includes("baik") ||
+          statusValue.includes("iya")
         ) {
           statusCell.fill = {
             type: "pattern",
@@ -776,7 +800,7 @@ router.get(
         INSERT INTO export_logs (user_id, site_id, feature)
         VALUES ($1, $2, $3)
         `,
-        [req.user.id, req.user.site_id, "inspeksi_chp"]
+        [req.user.id, req.user.site_id, "inspeksi_chp"],
       );
     } catch (err) {
       console.error("INSPEKSI CHP EXPORT XLSX ERROR:", err);
@@ -787,7 +811,7 @@ router.get(
         return res.end();
       }
     }
-  }
+  },
 );
 
 module.exports = router;
