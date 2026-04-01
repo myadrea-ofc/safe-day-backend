@@ -1,4 +1,4 @@
-const { sendLpiNotification } = require("../services/notification.services"); 
+const { sendLpiNotification } = require("../services/notification.services");
 
 const express = require("express");
 const router = express.Router();
@@ -10,8 +10,7 @@ const authMiddleware = require("../middlewares/auth.middleware");
 // === MULTER ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
@@ -88,7 +87,9 @@ router.post(
       const site_id = req.user.site_id;
 
       const file_path = req.files?.file?.[0]?.filename || null;
-      const foto_paths = req.files?.foto ? req.files.foto.map((f) => f.filename) : [];
+      const foto_paths = req.files?.foto
+        ? req.files.foto.map((f) => f.filename)
+        : [];
 
       const insertRes = await pool.query(
         `
@@ -128,7 +129,7 @@ router.post(
           JSON.stringify(foto_paths),
           status_lokasi,
           site_id,
-        ]
+        ],
       );
 
       const lpiId = insertRes.rows?.[0]?.id;
@@ -137,7 +138,11 @@ router.post(
       if (lpiId) {
         try {
           const senderName =
-            req.user.name || req.user.full_name || req.user.username || nama || "User";
+            req.user.name ||
+            req.user.full_name ||
+            req.user.username ||
+            nama ||
+            "User";
 
           await sendLpiNotification({
             creatorId: req.user.id,
@@ -160,7 +165,7 @@ router.post(
       console.error("LPI POST ERROR:", err);
       return res.status(500).json({ message: "Server error" });
     }
-  }
+  },
 );
 
 router.get("/", authMiddleware, async (req, res) => {
@@ -201,7 +206,6 @@ router.get("/", authMiddleware, async (req, res) => {
       params.push(site_id);
     }
 
-
     query += " ORDER BY created_at DESC";
 
     const result = await pool.query(query, params);
@@ -228,7 +232,7 @@ router.get(
         ORDER BY exported_at DESC
         LIMIT 1
         `,
-        [req.user.id, "lpi"]
+        [req.user.id, "lpi"],
       );
 
       if (lastExport.rowCount > 0) {
@@ -307,15 +311,22 @@ router.get(
       }
 
       const now = new Date();
-      const fileName = `LPI_${Date.now()}.xlsx`;
+
+      const formattedDate = now
+        .toLocaleDateString("id-ID", {
+          timeZone: "Asia/Jakarta",
+        })
+        .replace(/\//g, "-");
+
+      const fileName = `LPI_${formattedDate}.xlsx`;
 
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}"`
+        `attachment; filename="${fileName}"`,
       );
 
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -417,8 +428,22 @@ router.get(
         { key: "foto_5", width: 18 },
       ];
 
-      // ===== TITLE ROW =====
-      worksheet.mergeCells("A1:Y1");
+      function getExcelColumnName(columnNumber) {
+        let dividend = columnNumber;
+        let columnName = "";
+
+        while (dividend > 0) {
+          const modulo = (dividend - 1) % 26;
+          columnName = String.fromCharCode(65 + modulo) + columnName;
+          dividend = Math.floor((dividend - modulo) / 26);
+        }
+
+        return columnName;
+      }
+
+      const lastColumnLetter = getExcelColumnName(worksheet.columns.length);
+
+      worksheet.mergeCells("A1:O1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "LAPORAN EXPORT LPI";
       titleCell.font = {
@@ -439,14 +464,14 @@ router.get(
       worksheet.getRow(1).height = 28;
 
       // ===== INFO ROW =====
-      worksheet.mergeCells("A2:Y2");
+      worksheet.mergeCells(`A2:${lastColumnLetter}2`);
       const infoCell = worksheet.getCell("A2");
       let currentUserSiteName = "-";
 
       if (req.user.site_id) {
         const siteRes = await pool.query(
           `SELECT site_name FROM sites WHERE id = $1 LIMIT 1`,
-          [req.user.site_id]
+          [req.user.site_id],
         );
 
         if (siteRes.rowCount > 0) {
@@ -550,7 +575,7 @@ router.get(
 
         const fileUrl = row.file_path
           ? `http://safety.borneo.co.id/uploads/${encodeURIComponent(
-              row.file_path
+              row.file_path,
             )}`
           : null;
 
@@ -665,7 +690,7 @@ router.get(
 
           if (foto) {
             const fotoUrl = `http://safety.borneo.co.id/uploads/${encodeURIComponent(
-              foto
+              foto,
             )}`;
 
             fotoCell.value = {
@@ -746,11 +771,13 @@ router.get(
 
       await workbook.commit();
 
-await pool.query(`
+      await pool.query(
+        `
   INSERT INTO export_logs (user_id, site_id, feature)
   VALUES ($1, $2, $3)
-`, [req.user.id, req.user.site_id, "lpi"]);
-
+`,
+        [req.user.id, req.user.site_id, "lpi"],
+      );
     } catch (err) {
       console.error("EXPORT XLSX ERROR:", err);
 
@@ -760,8 +787,7 @@ await pool.query(`
         res.end();
       }
     }
-  }
+  },
 );
-
 
 module.exports = router;
