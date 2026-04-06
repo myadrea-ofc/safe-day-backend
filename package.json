@@ -32,5 +32,8 @@
   "bugs": {
     "url": "https://github.com/myadrea-ofc/safe-day-backend/issues"
   },
-  "homepage": "https://github.com/myadrea-ofc/safe-day-backend#readme"
+  "homepage": "https://github.com/myadrea-ofc/safe-day-backend#readme",
+  "devDependencies": {
+    "prettier": "^3.8.1"
+  }
 }

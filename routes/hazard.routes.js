@@ -10,8 +10,7 @@ const ExcelJS = require("exceljs");
 // === MULTER ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
@@ -58,20 +57,25 @@ function ensureExcelDownloadAccess(feature) {
 router.post(
   "/",
   authMiddleware,
-  upload.fields([
-    { name: "foto1" },
-    { name: "foto2" },
-    { name: "foto3" },
-  ]),
+  upload.fields([{ name: "foto1" }, { name: "foto2" }, { name: "foto3" }]),
   async (req, res) => {
     try {
       console.log("Body:", req.body);
       console.log("User Site ID:", req.user.site_id);
 
       const {
-        nama, id_karyawan, perusahaan, jabatan, department,
-        lokasi_temuan, tanggal, waktu, jenis_temuan,
-        narasi_temuan, info_perbaikan, status_sesuai,
+        nama,
+        id_karyawan,
+        perusahaan,
+        jabatan,
+        department,
+        lokasi_temuan,
+        tanggal,
+        waktu,
+        jenis_temuan,
+        narasi_temuan,
+        info_perbaikan,
+        status_sesuai,
       } = req.body;
 
       // Ambil site_id dari token JWT melalui middleware
@@ -123,7 +127,7 @@ router.post(
         foto3,
         info_perbaikan || null,
         status_sesuai || null,
-        site_id
+        site_id,
       ];
 
       const result = await pool.query(query, values);
@@ -133,7 +137,11 @@ router.post(
       if (hazardId) {
         try {
           const senderName =
-            req.user.name || req.user.full_name || req.user.username || nama || "User";
+            req.user.name ||
+            req.user.full_name ||
+            req.user.username ||
+            nama ||
+            "User";
 
           await sendHazardNotification({
             creatorId: req.user.id,
@@ -153,15 +161,14 @@ router.post(
         message: "Data Hazard berhasil disimpan",
         id: result.rows[0].id,
       });
-
     } catch (error) {
       console.error("HAZARD PG ERROR:", error);
       res.status(500).json({
         success: false,
-        error: error.message
+        error: error.message,
       });
     }
-  }
+  },
 );
 
 router.get("/", authMiddleware, async (req, res) => {
@@ -214,7 +221,7 @@ router.get(
         ORDER BY exported_at DESC
         LIMIT 1
         `,
-        [req.user.id, "hazard"]
+        [req.user.id, "hazard"],
       );
 
       if (lastExport.rowCount > 0) {
@@ -292,15 +299,22 @@ router.get(
 
       // ===== FILE RESPONSE =====
       const now = new Date();
-      const fileName = `Hazard_${Date.now()}.xlsx`;
+
+      const formattedDate = now
+        .toLocaleDateString("id-ID", {
+          timeZone: "Asia/Jakarta",
+        })
+        .replace(/\//g, "-");
+
+      const fileName = `Hazard_${formattedDate}.xlsx`;
 
       res.setHeader(
         "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}"`
+        `attachment; filename="${fileName}"`,
       );
 
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -380,7 +394,7 @@ router.get(
       function buildUploadUrl(filePath) {
         if (!filePath) return null;
         return `http://safety.borneo.co.id/uploads/${encodeURIComponent(
-          filePath
+          filePath,
         )}`;
       }
 
@@ -406,8 +420,22 @@ router.get(
         { key: "foto_3", width: 18 },
       ];
 
-      // ===== TITLE ROW =====
-      worksheet.mergeCells("A1:R1");
+      function getExcelColumnName(columnNumber) {
+        let dividend = columnNumber;
+        let columnName = "";
+
+        while (dividend > 0) {
+          const modulo = (dividend - 1) % 26;
+          columnName = String.fromCharCode(65 + modulo) + columnName;
+          dividend = Math.floor((dividend - modulo) / 26);
+        }
+
+        return columnName;
+      }
+
+      const lastColumnLetter = getExcelColumnName(worksheet.columns.length);
+
+      worksheet.mergeCells(`A1:${lastColumnLetter}1`);
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "LAPORAN EXPORT HAZARD";
       titleCell.font = {
@@ -428,14 +456,14 @@ router.get(
       worksheet.getRow(1).height = 28;
 
       // ===== INFO ROW =====
-      worksheet.mergeCells("A2:R2");
+      worksheet.mergeCells(`A2:${lastColumnLetter}2`);
       const infoCell = worksheet.getCell("A2");
       let currentUserSiteName = "-";
 
       if (req.user.site_id) {
         const siteRes = await pool.query(
           `SELECT site_name FROM sites WHERE id = $1 LIMIT 1`,
-          [req.user.site_id]
+          [req.user.site_id],
         );
 
         if (siteRes.rowCount > 0) {
@@ -683,7 +711,7 @@ router.get(
         INSERT INTO export_logs (user_id, site_id, feature)
         VALUES ($1, $2, $3)
         `,
-        [req.user.id, req.user.site_id, "hazard"]
+        [req.user.id, req.user.site_id, "hazard"],
       );
     } catch (err) {
       console.error("EXPORT XLSX ERROR:", err);
@@ -694,7 +722,7 @@ router.get(
 
       res.end();
     }
-  }
+  },
 );
 
 module.exports = router;
