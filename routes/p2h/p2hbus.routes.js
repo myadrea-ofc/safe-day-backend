@@ -536,7 +536,7 @@ router.get(
         })
         .replace(/\//g, "-");
 
-      const fileName = `P2H_BUS_${formattedDate}.xlsx`;
+      const exportFileName = `P2H_BUS_${formattedDate}.xlsx`;
 
       res.setHeader(
         "Content-Type",
@@ -544,7 +544,7 @@ router.get(
       );
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}"`,
+        `attachment; filename="${exportFileName}"`,
       );
 
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -591,6 +591,77 @@ router.get(
           return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
         } catch (_) {
           return [];
+        }
+      }
+
+      function normalizeCellValue(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function applyStatusColor(cell, rawValue) {
+        const value = normalizeCellValue(rawValue);
+
+        const greenValues = ["iya", "ya", "layak", "ada & layak"];
+        const redValues = ["tidak", "tidak ada"];
+        const yellowValues = ["tidak berfungsi"];
+
+        if (greenValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFDCFCE7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF166534" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (redValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEE2E2" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF991B1B" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (yellowValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF92400E" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
         }
       }
 
@@ -857,6 +928,12 @@ router.get(
 
       headerRow.commit();
 
+      const colorableColumns = [
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+        29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+        47, 48, 49, 51, 53, 54, 55, 56, 57, 58, 60,
+      ];
+
       for (let i = 0; i < result.rows.length; i++) {
         const row = result.rows[i];
         const parsedFiles = parseFiles(row.files);
@@ -966,20 +1043,27 @@ router.get(
           };
         });
 
+        colorableColumns.forEach((colNumber) => {
+          const cell = excelRow.getCell(colNumber);
+          applyStatusColor(cell, cell.value);
+        });
+
         excelRow.height = 22;
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFF9FAFB" },
-            };
+            if (!cell.fill) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF9FAFB" },
+              };
+            }
           });
         }
 
         for (let j = 0; j < 5; j++) {
-          const fileName = parsedFiles[j];
+          const uploadedFileName = parsedFiles[j];
           const fileCell = excelRow.getCell(63 + j);
 
           const baseUrl = (process.env.PUBLIC_BASE_URL || "").replace(
@@ -987,8 +1071,8 @@ router.get(
             "",
           );
 
-          if (fileName) {
-            const fileUrl = `${baseUrl}/uploads/${encodeURIComponent(fileName)}`;
+          if (uploadedFileName) {
+            const fileUrl = `${baseUrl}/uploads/${encodeURIComponent(uploadedFileName)}`;
 
             fileCell.value = {
               text: `Lihat File ${j + 1}`,
@@ -1011,58 +1095,6 @@ router.get(
               horizontal: "center",
             };
           }
-        }
-
-        const statusCell = excelRow.getCell(60);
-        const statusValue = (row.status_siap || "")
-          .toString()
-          .toLowerCase()
-          .trim();
-
-        if (
-          statusValue.includes("tidak") ||
-          statusValue.includes("belum") ||
-          statusValue.includes("tidak sesuai") ||
-          statusValue.includes("no")
-        ) {
-          statusCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEE2E2" },
-          };
-          statusCell.font = {
-            bold: true,
-            color: { argb: "FF991B1B" },
-            size: 10,
-          };
-          statusCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
-        } else if (
-          statusValue.includes("siap") ||
-          statusValue.includes("sesuai") ||
-          statusValue.includes("aman") ||
-          statusValue.includes("baik") ||
-          statusValue.includes("iya") ||
-          statusValue.includes("ya") ||
-          statusValue.includes("yes") ||
-          statusValue.includes("ok")
-        ) {
-          statusCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFDCFCE7" },
-          };
-          statusCell.font = {
-            bold: true,
-            color: { argb: "FF166534" },
-            size: 10,
-          };
-          statusCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
         }
 
         excelRow.commit();
