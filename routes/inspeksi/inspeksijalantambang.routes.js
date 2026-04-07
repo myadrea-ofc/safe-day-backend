@@ -454,31 +454,31 @@ router.get(
         { key: "jumlah_inspektor", width: 18 },
         { key: "apar", width: 18 },
 
-        { key: "opsi1", width: 24 },
-        { key: "opsi2", width: 24 },
-        { key: "opsi3", width: 24 },
-        { key: "opsi4", width: 24 },
-        { key: "opsi5", width: 24 },
-        { key: "opsi6", width: 24 },
-        { key: "opsi7", width: 24 },
-        { key: "opsi8", width: 24 },
-        { key: "opsi9", width: 24 },
-        { key: "opsi10", width: 24 },
-        { key: "opsi11", width: 24 },
-        { key: "opsi12", width: 24 },
-        { key: "opsi13", width: 24 },
-        { key: "opsi14", width: 24 },
-        { key: "opsi15", width: 24 },
-        { key: "opsi16", width: 24 },
-        { key: "opsi17", width: 24 },
-        { key: "opsi18", width: 24 },
-        { key: "opsi19", width: 24 },
-        { key: "opsi20", width: 24 },
-        { key: "opsi21", width: 24 },
-        { key: "opsi22", width: 24 },
+        { key: "opsi1", width: 50 },
+        { key: "opsi2", width: 50 },
+        { key: "opsi3", width: 50 },
+        { key: "opsi4", width: 50 },
+        { key: "opsi5", width: 50 },
+        { key: "opsi6", width: 50 },
+        { key: "opsi7", width: 50 },
+        { key: "opsi8", width: 50 },
+        { key: "opsi9", width: 50 },
+        { key: "opsi10", width: 50 },
+        { key: "opsi11", width: 50 },
+        { key: "opsi12", width: 50 },
+        { key: "opsi13", width: 50 },
+        { key: "opsi14", width: 50 },
+        { key: "opsi15", width: 50 },
+        { key: "opsi16", width: 50 },
+        { key: "opsi17", width: 50 },
+        { key: "opsi18", width: 50 },
+        { key: "opsi19", width: 50 },
+        { key: "opsi20", width: 50 },
+        { key: "opsi21", width: 50 },
+        { key: "opsi22", width: 50 },
 
-        { key: "ket_hasil", width: 40 },
-        { key: "saran_masuk", width: 40 },
+        { key: "ket_hasil", width: 60 },
+        { key: "saran_masuk", width: 60 },
         { key: "status_inspeksi", width: 22 },
         { key: "created_at", width: 22 },
         { key: "site_name", width: 18 },
@@ -613,7 +613,7 @@ router.get(
         "Foto 3",
       ]);
 
-      headerRow.height = 40;
+      headerRow.height = 50;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -689,7 +689,7 @@ router.get(
 
         excelRow.eachCell((cell, colNumber) => {
           cell.alignment = {
-            vertical: "top",
+            vertical: "middle",
             horizontal:
               colNumber === 1 ||
               colNumber === 3 ||
