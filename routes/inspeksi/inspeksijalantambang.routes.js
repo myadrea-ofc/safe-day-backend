@@ -525,12 +525,12 @@ router.get(
       worksheet.columns = [
         { key: "no", width: 8 },
         { key: "nama", width: 24 },
-        { key: "nrp", width: 14 },
-        { key: "department", width: 20 },
+        { key: "nrp", width: 24 },
+        { key: "department", width: 24 },
         { key: "perusahaan", width: 24 },
-        { key: "tanggal", width: 16 },
-        { key: "jumlah_inspektor", width: 18 },
-        { key: "apar", width: 18 },
+        { key: "tanggal", width: 24 },
+        { key: "jumlah_inspektor", width: 24 },
+        { key: "apar", width: 24 },
 
         { key: "opsi1", width: 55 },
         { key: "opsi2", width: 55 },
@@ -557,12 +557,12 @@ router.get(
 
         { key: "ket_hasil", width: 60 },
         { key: "saran_masuk", width: 60 },
-        { key: "status_inspeksi", width: 22 },
-        { key: "created_at", width: 22 },
-        { key: "site_name", width: 18 },
-        { key: "foto_1", width: 18 },
-        { key: "foto_2", width: 18 },
-        { key: "foto_3", width: 18 },
+        { key: "status_inspeksi", width: 24 },
+        { key: "created_at", width: 24 },
+        { key: "site_name", width: 24 },
+        { key: "foto_1", width: 24 },
+        { key: "foto_2", width: 24 },
+        { key: "foto_3", width: 24 },
       ];
 
       function getExcelColumnName(columnNumber) {
@@ -808,11 +808,13 @@ router.get(
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFF9FAFB" },
-            };
+            if (!cell.fill) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF9FAFB" },
+              };
+            }
           });
         }
 
