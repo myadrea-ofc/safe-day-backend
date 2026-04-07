@@ -440,8 +440,86 @@ router.get(
         });
       }
 
-      function normalizeApar(value) {
-        return (value || "").toString().trim().toLowerCase();
+      function normalizeCellValue(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function applyStatusColor(cell, rawValue) {
+        const value = normalizeCellValue(rawValue);
+
+        const greenValues = [
+          "iya",
+          "ya",
+          "yes",
+          "sesuai",
+          "aman",
+          "baik",
+          "ada & layak",
+          "layak",
+        ];
+
+        const redValues = ["tidak", "no", "tidak ada", "belum", "tidak sesuai"];
+
+        const yellowValues = ["n/a", "na", "n.a", "tidak berfungsi"];
+
+        if (greenValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFDCFCE7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF166534" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (redValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEE2E2" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF991B1B" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (yellowValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF92400E" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+        }
       }
 
       worksheet.columns = [
@@ -454,28 +532,28 @@ router.get(
         { key: "jumlah_inspektor", width: 18 },
         { key: "apar", width: 18 },
 
-        { key: "opsi1", width: 50 },
-        { key: "opsi2", width: 50 },
-        { key: "opsi3", width: 50 },
-        { key: "opsi4", width: 50 },
-        { key: "opsi5", width: 50 },
-        { key: "opsi6", width: 50 },
-        { key: "opsi7", width: 50 },
-        { key: "opsi8", width: 50 },
-        { key: "opsi9", width: 50 },
-        { key: "opsi10", width: 50 },
-        { key: "opsi11", width: 50 },
-        { key: "opsi12", width: 50 },
-        { key: "opsi13", width: 50 },
-        { key: "opsi14", width: 50 },
-        { key: "opsi15", width: 50 },
-        { key: "opsi16", width: 50 },
-        { key: "opsi17", width: 50 },
-        { key: "opsi18", width: 50 },
-        { key: "opsi19", width: 50 },
-        { key: "opsi20", width: 50 },
-        { key: "opsi21", width: 50 },
-        { key: "opsi22", width: 50 },
+        { key: "opsi1", width: 55 },
+        { key: "opsi2", width: 55 },
+        { key: "opsi3", width: 55 },
+        { key: "opsi4", width: 55 },
+        { key: "opsi5", width: 55 },
+        { key: "opsi6", width: 55 },
+        { key: "opsi7", width: 55 },
+        { key: "opsi8", width: 55 },
+        { key: "opsi9", width: 55 },
+        { key: "opsi10", width: 55 },
+        { key: "opsi11", width: 55 },
+        { key: "opsi12", width: 55 },
+        { key: "opsi13", width: 55 },
+        { key: "opsi14", width: 55 },
+        { key: "opsi15", width: 55 },
+        { key: "opsi16", width: 55 },
+        { key: "opsi17", width: 55 },
+        { key: "opsi18", width: 55 },
+        { key: "opsi19", width: 55 },
+        { key: "opsi20", width: 55 },
+        { key: "opsi21", width: 55 },
+        { key: "opsi22", width: 55 },
 
         { key: "ket_hasil", width: 60 },
         { key: "saran_masuk", width: 60 },
@@ -641,6 +719,11 @@ router.get(
 
       headerRow.commit();
 
+      const colorableColumns = [
+        8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26, 27, 28, 29, 30, 33,
+      ];
+
       for (let i = 0; i < result.rows.length; i++) {
         const row = result.rows[i];
 
@@ -716,6 +799,11 @@ router.get(
           };
         });
 
+        colorableColumns.forEach((colNumber) => {
+          const cell = excelRow.getCell(colNumber);
+          applyStatusColor(cell, cell.value);
+        });
+
         excelRow.height = 22;
 
         if (i % 2 === 0) {
@@ -726,75 +814,6 @@ router.get(
               fgColor: { argb: "FFF9FAFB" },
             };
           });
-        }
-
-        const aparCell = excelRow.getCell(8);
-        const aparValue = normalizeApar(row.apar);
-
-        if (aparValue === "ya" || aparValue === "yes") {
-          aparCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFE8F5E9" },
-          };
-          aparCell.font = {
-            bold: true,
-            color: { argb: "FF166534" },
-            size: 10,
-          };
-          aparCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
-        } else if (aparValue === "tidak" || aparValue === "no") {
-          aparCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEE2E2" },
-          };
-          aparCell.font = {
-            bold: true,
-            color: { argb: "FF991B1B" },
-            size: 10,
-          };
-          aparCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
-        } else if (
-          aparValue === "n/a" ||
-          aparValue === "na" ||
-          aparValue === "n.a"
-        ) {
-          aparCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEF3C7" },
-          };
-          aparCell.font = {
-            bold: true,
-            color: { argb: "FF92400E" },
-            size: 10,
-          };
-          aparCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
-        } else {
-          aparCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFF3F4F6" },
-          };
-          aparCell.font = {
-            bold: true,
-            color: { argb: "FF374151" },
-            size: 10,
-          };
-          aparCell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-          };
         }
 
         const fotoFields = [row.foto1, row.foto2, row.foto3];

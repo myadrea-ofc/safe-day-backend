@@ -606,7 +606,7 @@ router.get(
 
         const greenValues = ["iya", "ya", "layak", "ada & layak"];
         const redValues = ["tidak", "tidak ada"];
-        const yellowValues = ["tidak berfungsi"];
+        const yellowValues = ["tidak berfungsi", "n/a"];
 
         if (greenValues.includes(value)) {
           cell.fill = {
@@ -677,37 +677,37 @@ router.get(
         { key: "shift_kerja", width: 14 },
         { key: "tanggal", width: 16 },
 
-        { key: "opsi_item1", width: 50 },
-        { key: "opsi_item2", width: 50 },
-        { key: "opsi_item3", width: 50 },
-        { key: "opsi_item4", width: 50 },
-        { key: "opsi_item5", width: 50 },
-        { key: "opsi_item6", width: 50 },
-        { key: "opsi_item7", width: 50 },
-        { key: "opsi_item8", width: 50 },
-        { key: "opsi_item9", width: 50 },
-        { key: "opsi_item10", width: 50 },
-        { key: "opsi_item11", width: 50 },
-        { key: "opsi_item12", width: 50 },
-        { key: "opsi_item13", width: 50 },
-        { key: "opsi_item14", width: 50 },
-        { key: "opsi_item15", width: 50 },
-        { key: "opsi_item16", width: 50 },
-        { key: "opsi_item17", width: 50 },
-        { key: "opsi_item18", width: 50 },
-        { key: "opsi_item19", width: 50 },
-        { key: "opsi_item20", width: 50 },
-        { key: "opsi_item21", width: 50  },
-        { key: "opsi_item22", width: 50 },
-        { key: "opsi_item23", width: 50 },
-        { key: "opsi_item24", width: 50 },
-        { key: "opsi_item25", width: 50 },
-        { key: "opsi_item26", width: 50 },
-        { key: "opsi_item27", width: 50 },
-        { key: "opsi_item28", width: 50 },
-        { key: "opsi_item29", width: 50 },
-        { key: "opsi_item30", width: 50 },
-        { key: "opsi_item31", width: 50 },
+        { key: "opsi_item1", width: 45 },
+        { key: "opsi_item2", width: 45 },
+        { key: "opsi_item3", width: 45 },
+        { key: "opsi_item4", width: 45 },
+        { key: "opsi_item5", width: 45 },
+        { key: "opsi_item6", width: 45 },
+        { key: "opsi_item7", width: 45 },
+        { key: "opsi_item8", width: 45 },
+        { key: "opsi_item9", width: 45 },
+        { key: "opsi_item10", width: 45 },
+        { key: "opsi_item11", width: 45 },
+        { key: "opsi_item12", width: 45 },
+        { key: "opsi_item13", width: 45 },
+        { key: "opsi_item14", width: 45 },
+        { key: "opsi_item15", width: 45 },
+        { key: "opsi_item16", width: 45 },
+        { key: "opsi_item17", width: 45 },
+        { key: "opsi_item18", width: 45  },
+        { key: "opsi_item19", width: 45 },
+        { key: "opsi_item20", width: 45 },
+        { key: "opsi_item21", width: 45  },
+        { key: "opsi_item22", width: 45 },
+        { key: "opsi_item23", width: 45 },
+        { key: "opsi_item24", width: 45 },
+        { key: "opsi_item25", width: 45 },
+        { key: "opsi_item26", width: 45 },
+        { key: "opsi_item27", width: 45 },
+        { key: "opsi_item28", width: 45 },
+        { key: "opsi_item29", width: 45 },
+        { key: "opsi_item30", width: 45 },
+        { key: "opsi_item31", width: 45 },
 
         { key: "opsi_keselamatan1", width: 30 },
         { key: "opsi_keselamatan2", width: 30 },
@@ -931,7 +931,7 @@ router.get(
       const colorableColumns = [
         11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
         29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
-        47, 48, 49, 51, 53, 54, 55, 56, 57, 58, 60,
+        47, 48, 49, 50, 51, 53, 54, 55, 56, 57, 58, 60,
       ];
 
       for (let i = 0; i < result.rows.length; i++) {
