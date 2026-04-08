@@ -439,47 +439,129 @@ router.get(
         });
       }
 
+      function normalizeCellValue(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function applyStatusColor(cell, rawValue) {
+        const value = normalizeCellValue(rawValue);
+
+        const greenValues = [
+          "iya",
+          "ya",
+          "yes",
+          "sesuai",
+          "aman",
+          "baik",
+          "ada & layak",
+          "layak",
+        ];
+
+        const redValues = ["tidak", "no", "tidak ada", "belum", "tidak sesuai"];
+
+        const yellowValues = ["n/a", "na", "n.a", "tidak berfungsi"];
+
+        if (greenValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFDCFCE7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF166534" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (redValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEE2E2" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF991B1B" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          return;
+        }
+
+        if (yellowValues.includes(value)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
+          cell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: "FF92400E" },
+          };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+        }
+      }
+
       worksheet.columns = [
         { key: "no", width: 8 },
         { key: "nama", width: 24 },
-        { key: "nrp", width: 14 },
-        { key: "department", width: 20 },
+        { key: "nrp", width: 24 },
+        { key: "department", width: 24 },
         { key: "perusahaan", width: 24 },
-        { key: "tanggal", width: 16 },
-        { key: "jumlah_inspektor", width: 18 },
+        { key: "tanggal", width: 24 },
+        { key: "jumlah_inspektor", width: 24 },
 
-        { key: "opsi1", width: 24 },
-        { key: "opsi2", width: 24 },
-        { key: "opsi3", width: 24 },
-        { key: "opsi4", width: 24 },
-        { key: "opsi5", width: 24 },
-        { key: "opsi6", width: 24 },
-        { key: "opsi7", width: 24 },
-        { key: "opsi8", width: 24 },
-        { key: "opsi9", width: 24 },
-        { key: "opsi10", width: 24 },
-        { key: "opsi11", width: 24 },
-        { key: "opsi12", width: 24 },
-        { key: "opsi13", width: 24 },
-        { key: "opsi14", width: 24 },
-        { key: "opsi15", width: 24 },
-        { key: "opsi16", width: 24 },
-        { key: "opsi17", width: 24 },
-        { key: "opsi18", width: 24 },
-        { key: "opsi19", width: 24 },
-        { key: "opsi20", width: 24 },
-        { key: "opsi21", width: 24 },
-        { key: "opsi22", width: 24 },
+        { key: "opsi1", width: 55 },
+        { key: "opsi2", width: 55 },
+        { key: "opsi3", width: 55 },
+        { key: "opsi4", width: 55 },
+        { key: "opsi5", width: 55 },
+        { key: "opsi6", width: 55 },
+        { key: "opsi7", width: 55 },
+        { key: "opsi8", width: 55 },
+        { key: "opsi9", width: 55 },
+        { key: "opsi10", width: 55 },
+        { key: "opsi11", width: 55 },
+        { key: "opsi12", width: 55 },
+        { key: "opsi13", width: 55 },
+        { key: "opsi14", width: 55 },
+        { key: "opsi15", width: 55 },
+        { key: "opsi16", width: 55 },
+        { key: "opsi17", width: 55 },
+        { key: "opsi18", width: 55 },
+        { key: "opsi19", width: 55 },
+        { key: "opsi20", width: 55 },
+        { key: "opsi21", width: 55 },
+        { key: "opsi22", width: 55 },
 
-        { key: "ket_hasil", width: 40 },
-        { key: "saran_masuk", width: 40 },
-        { key: "status_inspeksi", width: 22 },
-        { key: "created_at", width: 22 },
-        { key: "site_name", width: 18 },
-        { key: "foto_1", width: 18 },
-        { key: "foto_2", width: 18 },
-        { key: "foto_3", width: 18 },
-        { key: "foto_4", width: 18 },
+        { key: "ket_hasil", width: 60 },
+        { key: "saran_masuk", width: 60 },
+        { key: "status_inspeksi", width: 24 },
+        { key: "created_at", width: 24 },
+        { key: "site_name", width: 24 },
+        { key: "foto_1", width: 24 },
+        { key: "foto_2", width: 24 },
+        { key: "foto_3", width: 24 },
+        { key: "foto_4", width: 24 },
       ];
 
       function getExcelColumnName(columnNumber) {
@@ -608,7 +690,7 @@ router.get(
         "Foto 4",
       ]);
 
-      headerRow.height = 40;
+      headerRow.height = 50;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -635,6 +717,11 @@ router.get(
       });
 
       headerRow.commit();
+
+      const colorableColumns = [
+        8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26, 27, 28, 29, 32,
+      ];
 
       for (let i = 0; i < result.rows.length; i++) {
         const row = result.rows[i];
@@ -684,14 +771,14 @@ router.get(
 
         excelRow.eachCell((cell, colNumber) => {
           cell.alignment = {
-            vertical: "top",
+            vertical: "middle",
             horizontal:
               colNumber === 1 ||
               colNumber === 3 ||
               colNumber === 6 ||
               colNumber === 7 ||
-              colNumber === 32 ||
-              colNumber === 33
+              colNumber === 30 ||
+              colNumber === 31
                 ? "center"
                 : "left",
             wrapText: true,
@@ -710,15 +797,22 @@ router.get(
           };
         });
 
+        colorableColumns.forEach((colNumber) => {
+          const cell = excelRow.getCell(colNumber);
+          applyStatusColor(cell, cell.value);
+        });
+
         excelRow.height = 22;
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFF9FAFB" },
-            };
+            if (!cell.fill) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF9FAFB" },
+              };
+            }
           });
         }
 
@@ -732,6 +826,7 @@ router.get(
             /\/$/,
             "",
           );
+
           if (foto) {
             const fotoUrl = `${baseUrl}/uploads/${encodeURIComponent(foto)}`;
 

@@ -580,7 +580,7 @@ router.get(
 
         const greenValues = ["iya", "ya", "layak", "ada & layak"];
         const redValues = ["tidak", "tidak ada"];
-        const yellowValues = ["tidak berfungsi"];
+        const yellowValues = ["tidak berfungsi", "n/a"];
 
         if (greenValues.includes(value)) {
           cell.fill = {
@@ -641,63 +641,63 @@ router.get(
 
       worksheet.columns = [
         { key: "no", width: 8 },
-        { key: "nama", width: 24 },
-        { key: "nrp", width: 16 },
-        { key: "jabatan", width: 18 },
-        { key: "department", width: 20 },
-        { key: "perusahaan", width: 24 },
-        { key: "lokasi_kerja", width: 22 },
-        { key: "hm_unit", width: 16 },
-        { key: "no_lambung_unit", width: 22 },
-        { key: "tanggal", width: 16 },
+        { key: "nama", width: 35 },
+        { key: "nrp", width: 20 },
+        { key: "jabatan", width: 25 },
+        { key: "department", width: 25 },
+        { key: "perusahaan", width: 30 },
+        { key: "lokasi_kerja", width: 25 },
+        { key: "hm_unit", width: 20 },
+        { key: "no_lambung_unit", width: 25 },
+        { key: "tanggal", width: 20 },
 
-        { key: "opsi_item1", width: 24 },
-        { key: "opsi_item2", width: 22 },
-        { key: "opsi_item3", width: 18 },
-        { key: "opsi_item4", width: 22 },
-        { key: "opsi_item5", width: 18 },
-        { key: "opsi_item6", width: 34 },
-        { key: "opsi_item7", width: 34 },
-        { key: "opsi_item8", width: 34 },
-        { key: "opsi_item9", width: 18 },
-        { key: "opsi_item10", width: 32 },
-        { key: "opsi_item11", width: 24 },
-        { key: "opsi_item12", width: 30 },
-        { key: "opsi_item13", width: 28 },
-        { key: "opsi_item14", width: 16 },
-        { key: "opsi_item15", width: 28 },
-        { key: "opsi_item16", width: 20 },
-        { key: "opsi_item17", width: 20 },
-        { key: "opsi_item18", width: 20 },
-        { key: "opsi_item19", width: 20 },
-        { key: "opsi_item20", width: 20 },
-        { key: "opsi_item21", width: 16 },
-        { key: "opsi_item22", width: 24 },
-        { key: "opsi_item23", width: 18 },
-        { key: "opsi_item24", width: 18 },
-        { key: "opsi_item25", width: 24 },
+        { key: "opsi_item1", width: 45 },
+        { key: "opsi_item2", width: 45 },
+        { key: "opsi_item3", width: 45 },
+        { key: "opsi_item4", width: 45 },
+        { key: "opsi_item5", width: 45 },
+        { key: "opsi_item6", width: 45 },
+        { key: "opsi_item7", width: 45 },
+        { key: "opsi_item8", width: 45 },
+        { key: "opsi_item9", width: 45 },
+        { key: "opsi_item10", width: 45 },
+        { key: "opsi_item11", width: 45 },
+        { key: "opsi_item12", width: 45 },
+        { key: "opsi_item13", width: 45 },
+        { key: "opsi_item14", width: 45 },
+        { key: "opsi_item15", width: 45 },
+        { key: "opsi_item16", width: 45 },
+        { key: "opsi_item17", width: 45 },
+        { key: "opsi_item18", width: 45 },
+        { key: "opsi_item19", width: 45 },
+        { key: "opsi_item20", width: 45 },
+        { key: "opsi_item21", width: 45 },
+        { key: "opsi_item22", width: 45 },
+        { key: "opsi_item23", width: 45 },
+        { key: "opsi_item24", width: 45 },
+        { key: "opsi_item25", width: 45 },
         { key: "opsi_item26", width: 46 },
-        { key: "opsi_item27", width: 18 },
-        { key: "opsi_item28", width: 20 },
-        { key: "opsi_item29", width: 18 },
-        { key: "opsi_item30", width: 20 },
-        { key: "opsi_item31", width: 20 },
-        { key: "opsi_item32", width: 20 },
-        { key: "opsi_item33", width: 16 },
+        { key: "opsi_item27", width: 45 },
+        { key: "opsi_item28", width: 45 },
+        { key: "opsi_item29", width: 45 },
+        { key: "opsi_item30", width: 45 },
+        { key: "opsi_item31", width: 45 },
+        { key: "opsi_item32", width: 45 },
+        { key: "opsi_item33", width: 45 },
 
-        { key: "opsi_standar_keselamatan1", width: 24 },
-        { key: "opsi_standar_keselamatan2", width: 28 },
-        { key: "opsi_standar_keselamatan3", width: 18 },
+        { key: "opsi_standar_keselamatan1", width: 30 },
+        { key: "opsi_standar_keselamatan2", width: 30 },
+        { key: "opsi_standar_keselamatan3", width: 30 },
 
-        { key: "kimper_berlaku", width: 18 },
-        { key: "jam_tidur", width: 16 },
+        { key: "kimper_berlaku", width: 25 },
+        { key: "jam_tidur", width: 20 },
 
-        { key: "status_keadaan1", width: 28 },
-        { key: "status_keadaan2", width: 28 },
-        { key: "status_keadaan3", width: 36 },
-        { key: "status_keadaan4", width: 28 },
-        { key: "status_keadaan5", width: 24 },
-        { key: "status_keadaan6", width: 24 },
+        { key: "status_keadaan1", width: 30 },
+        { key: "status_keadaan2", width: 30 },
+        { key: "status_keadaan3", width: 30 },
+        { key: "status_keadaan4", width: 30 },
+        { key: "status_keadaan5", width: 30 },
+        { key: "status_keadaan6", width: 30 },
 
         { key: "status_siap", width: 24 },
         { key: "created_at", width: 22 },
@@ -862,7 +862,7 @@ router.get(
         "File 5",
       ]);
 
-      headerRow.height = 40;
+      headerRow.height = 50;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -974,7 +974,7 @@ router.get(
 
         excelRow.eachCell((cell, colNumber) => {
           cell.alignment = {
-            vertical: "top",
+            vertical: "middle",
             horizontal:
               colNumber === 1 ||
               colNumber === 3 ||
@@ -1007,7 +1007,7 @@ router.get(
           applyStatusColor(cell, cell.value);
         });
 
-        excelRow.height = 22;
+        excelRow.height = 35;
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {

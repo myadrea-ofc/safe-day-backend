@@ -442,7 +442,7 @@ router.get(
 
         const greenValues = ["iya", "ya", "layak", "ada & layak"];
         const redValues = ["tidak", "tidak ada"];
-        const yellowValues = ["tidak berfungsi"];
+        const yellowValues = ["tidak berfungsi", "n/a"];
 
         if (greenValues.includes(value)) {
           cell.fill = {
@@ -503,14 +503,14 @@ router.get(
 
       worksheet.columns = [
         { key: "no", width: 8 },
-        { key: "nama", width: 24 },
-        { key: "nrp", width: 16 },
-        { key: "jabatan", width: 20 },
-        { key: "department", width: 20 },
-        { key: "perusahaan", width: 24 },
-        { key: "lokasi_kerja", width: 22 },
-        { key: "hm_unit", width: 16 },
-        { key: "tanggal", width: 16 },
+        { key: "nama", width: 35 },
+        { key: "nrp", width: 20 },
+        { key: "jabatan", width: 25 },
+        { key: "department", width: 25 },
+        { key: "perusahaan", width: 30 },
+        { key: "lokasi_kerja", width: 25 },
+        { key: "hm_unit", width: 20 },
+        { key: "tanggal", width: 20 },
 
         { key: "opsi_item1", width: 20 },
         { key: "opsi_item2", width: 20 },
@@ -666,7 +666,7 @@ router.get(
         "File 5",
       ]);
 
-      headerRow.height = 40;
+      headerRow.height = 50;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -777,7 +777,7 @@ router.get(
           applyStatusColor(cell, cell.value);
         });
 
-        excelRow.height = 22;
+        excelRow.height = 35;
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {

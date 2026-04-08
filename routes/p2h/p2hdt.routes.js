@@ -13,8 +13,7 @@ if (!fs.existsSync("uploads")) {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 
 const upload = multer({
@@ -579,7 +578,7 @@ router.get(
 
         const greenValues = ["iya", "ya", "layak", "ada & layak"];
         const redValues = ["tidak", "tidak ada"];
-        const yellowValues = ["tidak berfungsi"];
+        const yellowValues = ["tidak berfungsi", "n/a"];
 
         if (greenValues.includes(value)) {
           cell.fill = {
@@ -640,62 +639,62 @@ router.get(
 
       worksheet.columns = [
         { key: "no", width: 8 },
-        { key: "nama", width: 24 },
-        { key: "jabatan", width: 20 },
-        { key: "department", width: 20 },
-        { key: "perusahaan", width: 24 },
+        { key: "nama", width: 35 },
+        { key: "jabatan", width: 25 },
+        { key: "department", width: 25 },
+        { key: "perusahaan", width: 30 },
         { key: "no_lambung_unit", width: 20 },
-        { key: "hm_sekarang", width: 16 },
-        { key: "waktu_p2h", width: 16 },
-        { key: "shift_kerja", width: 14 },
-        { key: "tanggal", width: 16 },
+        { key: "hm_sekarang", width: 20 },
+        { key: "waktu_p2h", width: 20 },
+        { key: "shift_kerja", width: 20 },
+        { key: "tanggal", width: 20 },
 
-        { key: "opsi_item1", width: 24 },
-        { key: "opsi_item2", width: 24 },
-        { key: "opsi_item3", width: 24 },
-        { key: "opsi_item4", width: 24 },
-        { key: "opsi_item5", width: 28 },
-        { key: "opsi_item6", width: 34 },
-        { key: "opsi_item7", width: 22 },
-        { key: "opsi_item8", width: 30 },
-        { key: "opsi_item9", width: 32 },
-        { key: "opsi_item10", width: 22 },
-        { key: "opsi_item11", width: 32 },
-        { key: "opsi_item12", width: 24 },
-        { key: "opsi_item13", width: 18 },
-        { key: "opsi_item14", width: 18 },
-        { key: "opsi_item15", width: 22 },
-        { key: "opsi_item16", width: 28 },
-        { key: "opsi_item17", width: 34 },
-        { key: "opsi_item18", width: 20 },
-        { key: "opsi_item19", width: 34 },
-        { key: "opsi_item20", width: 20 },
-        { key: "opsi_item21", width: 20 },
-        { key: "opsi_item22", width: 20 },
-        { key: "opsi_item23", width: 18 },
-        { key: "opsi_item24", width: 20 },
-        { key: "opsi_item25", width: 18 },
-        { key: "opsi_item26", width: 20 },
-        { key: "opsi_item27", width: 20 },
-        { key: "opsi_item28", width: 18 },
-        { key: "opsi_item29", width: 20 },
-        { key: "opsi_item30", width: 20 },
-        { key: "opsi_item31", width: 22 },
+        { key: "opsi_item1", width: 45 },
+        { key: "opsi_item2", width: 45 },
+        { key: "opsi_item3", width: 45 },
+        { key: "opsi_item4", width: 45 },
+        { key: "opsi_item5", width: 45 },
+        { key: "opsi_item6", width: 45 },
+        { key: "opsi_item7", width: 45 },
+        { key: "opsi_item8", width: 45 },
+        { key: "opsi_item9", width: 45 },
+        { key: "opsi_item10", width: 45 },
+        { key: "opsi_item11", width: 45 },
+        { key: "opsi_item12", width: 45 },
+        { key: "opsi_item13", width: 45 },
+        { key: "opsi_item14", width: 45 },
+        { key: "opsi_item15", width: 45 },
+        { key: "opsi_item16", width: 45 },
+        { key: "opsi_item17", width: 45 },
+        { key: "opsi_item18", width: 45 },
+        { key: "opsi_item19", width: 45 },
+        { key: "opsi_item20", width: 45 },
+        { key: "opsi_item21", width: 45 },
+        { key: "opsi_item22", width: 45 },
+        { key: "opsi_item23", width: 45 },
+        { key: "opsi_item24", width: 45 },
+        { key: "opsi_item25", width: 45 },
+        { key: "opsi_item26", width: 45 },
+        { key: "opsi_item27", width: 45 },
+        { key: "opsi_item28", width: 45 },
+        { key: "opsi_item29", width: 45 },
+        { key: "opsi_item30", width: 45 },
+        { key: "opsi_item31", width: 45 },
 
-        { key: "opsi_standar_keselamatan1", width: 24 },
-        { key: "opsi_standar_keselamatan2", width: 28 },
-        { key: "opsi_standar_keselamatan3", width: 18 },
+        { key: "opsi_standar_keselamatan1", width: 30 },
+        { key: "opsi_standar_keselamatan2", width: 30 },
+        { key: "opsi_standar_keselamatan3", width: 30 },
 
-        { key: "laporan_temuan", width: 40 },
-        { key: "kimper_berlaku", width: 18 },
-        { key: "jam_operasi", width: 18 },
+        { key: "laporan_temuan", width: 60 },
+        { key: "kimper_berlaku", width: 22 },
+        { key: "jam_operasi", width: 16 },
 
-        { key: "status_keadaan1", width: 28 },
-        { key: "status_keadaan2", width: 28 },
-        { key: "status_keadaan3", width: 36 },
-        { key: "status_keadaan4", width: 28 },
-        { key: "status_keadaan5", width: 24 },
-        { key: "status_keadaan6", width: 24 },
+        { key: "status_keadaan1", width: 50 },
+        { key: "status_keadaan2", width: 50 },
+        { key: "status_keadaan3", width: 50 },
+        { key: "status_keadaan4", width: 50 },
+        { key: "status_keadaan5", width: 50 },
+        { key: "status_keadaan6", width: 50 },
 
         { key: "status_siap", width: 24 },
         { key: "created_at", width: 22 },
@@ -859,7 +858,7 @@ router.get(
         "File 5",
       ]);
 
-      headerRow.height = 40;
+      headerRow.height = 50;
 
       headerRow.eachCell((cell) => {
         cell.font = {
@@ -888,10 +887,9 @@ router.get(
       headerRow.commit();
 
       const colorableColumns = [
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
-        31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-        41, 42, 43, 46, 48, 49, 50, 51, 52, 53, 54,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+        29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46, 48, 49,
+        50, 51, 52, 53, 54,
       ];
 
       for (let i = 0; i < result.rows.length; i++) {
@@ -969,7 +967,7 @@ router.get(
 
         excelRow.eachCell((cell, colNumber) => {
           cell.alignment = {
-            vertical: "top",
+            vertical: "middle",
             horizontal:
               colNumber === 1 ||
               colNumber === 7 ||
@@ -1001,7 +999,7 @@ router.get(
           applyStatusColor(cell, cell.value);
         });
 
-        excelRow.height = 22;
+        excelRow.height = 35;
 
         if (i % 2 === 0) {
           excelRow.eachCell((cell) => {
