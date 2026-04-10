@@ -87,6 +87,8 @@ const notificationRoutes = require('./routes/notification.routes');
 const excelAccessRoutes = require('./routes/excelaccess.routes');
 const excelAccessRequestRoutes = require('./routes/excelaccessrequest.routes');
 
+const dropdownRoutes = require('./routes/dropdown.routes');
+
 app.use('/auth', authRoutes);
 
 app.use('/api/events', eventRoutes);
@@ -127,6 +129,12 @@ app.use('/hses_buletin', buletinRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/excel-access', excelAccessRoutes);
 app.use('/excel-access-requests', excelAccessRequestRoutes);
+
+app.use('/api/master', dropdownRoutes);
+
+app.get('/', (req, res) => {
+  res.json({ message: 'Backend API running' });
+});
 
 app.post('/login', async (req, res) => {
   const client = await pool.connect();
