@@ -40,9 +40,9 @@ const getNoLambungByUnit = async (req, res) => {
 const getDepartment = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name_deparment AS label
+      SELECT id, name_department AS label
       FROM form_department
-      ORDER BY name_deparment ASC
+      ORDER BY name_department ASC
     `);
 
     res.json(result.rows);
