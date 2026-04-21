@@ -31,19 +31,52 @@ router.get("/", authMiddleware, async (req, res) => {
   res.json(result.rows);
 });
 
+router.put("/read-all", authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      UPDATE notifications
+      SET is_read = true
+      WHERE user_id = $1
+        AND is_read = false
+      RETURNING id
+      `,
+      [req.user.id]
+    );
 
-router.put("/:id/read", authMiddleware, async (req, res) => {
-  await pool.query(
-    `
-    UPDATE notifications
-    SET is_read = true
-    WHERE id = $1 AND user_id = $2
-    `,
-    [req.params.id, req.user.id]
-  );
-
-  res.json({ message: "Marked as read" });
+    return res.json({
+      message: "All notifications marked as read",
+      updated_count: result.rowCount,
+    });
+  } catch (error) {
+    console.error("read-all notifications error:", error);
+    return res.status(500).json({
+      message: "Failed to mark all notifications as read",
+    });
+  }
 });
 
+router.put("/:id/read", authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      UPDATE notifications
+      SET is_read = true
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+      `,
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    return res.json({ message: "Marked as read" });
+  } catch (error) {
+    console.error("read notification error:", error);
+    return res.status(500).json({ message: "Failed to mark notification as read" });
+  }
+});
 
 module.exports = router;
