@@ -1,148 +1,159 @@
-require('dotenv').config();
-const pool = require('./config/db');
+require("dotenv").config();
+const pool = require("./config/db");
 
-const rateLimit = require('express-rate-limit');
-const forgotPasswordRoutes = require('./routes/forgotpassword.routes');
-const mustChangePasswordGuard = require('./middlewares/mustChangePassword.middleware');
+const rateLimit = require("express-rate-limit");
+const forgotPasswordRoutes = require("./routes/forgotpassword.routes");
+const mustChangePasswordGuard = require("./middlewares/mustChangePassword.middleware");
 
-const authMiddleware = require('./middlewares/auth.middleware');
-const { sendLoginOtpEmail } = require('./config/mailer');
+const authMiddleware = require("./middlewares/auth.middleware");
+const { sendLoginOtpEmail } = require("./config/mailer");
 
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const path = require('path');
-const multer = require('multer');
-const bcrypt = require('bcryptjs');
+const express = require("express");
+const cors = require("cors");
+const { Pool } = require("pg");
+const path = require("path");
+const multer = require("multer");
+const bcrypt = require("bcryptjs");
 
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  req.db = pool;
+  next();
+});
+
 const forgotLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 menit
   max: 20, // 20 request per IP per menit
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Terlalu banyak request. Coba lagi sebentar.' },
+  message: { message: "Terlalu banyak request. Coba lagi sebentar." },
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Ping endpoint untuk health check
-app.get('/ping', (req, res) => {
-  res.json({ message: 'pong123' });
+app.get("/ping", (req, res) => {
+  res.json({ message: "pong123" });
 });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+    cb(null, Date.now() + "-" + file.originalname);
   },
 });
 const upload = multer({ storage: storage });
 
-const eventRoutes = require('./routes/event.routes');
-const userRoutes = require('./routes/user.routes');
+const eventRoutes = require("./routes/event.routes");
+const userRoutes = require("./routes/user.routes");
 
-const lpiRoutes = require('./routes/lpi.routes');
-const hazardRoutes = require('./routes/hazard.routes');
-const p5mRoutes = require('./routes/p5m.routes');
+const lpiRoutes = require("./routes/lpi.routes");
+const hazardRoutes = require("./routes/hazard.routes");
+const p5mRoutes = require("./routes/p5m.routes");
 
-const inspeksiJalanTambangRoutes = require('./routes/inspeksi/inspeksijalantambang.routes');
-const inspeksikantor = require('./routes/inspeksi/inspeksikantor.routes');
-const inspeksimtd = require('./routes/inspeksi/inspeksimtd.routes');
-const inspeksiplant = require('./routes/inspeksi/inspeksiplant.routes');
-const inspeksichp = require('./routes/inspeksi/inspeksichp.routes');
-const inspeksifasilitasbbm = require('./routes/inspeksi/inspeksifasilitasbbm.routes');
+const inspeksiJalanTambangRoutes = require("./routes/inspeksi/inspeksijalantambang.routes");
+const inspeksikantor = require("./routes/inspeksi/inspeksikantor.routes");
+const inspeksimtd = require("./routes/inspeksi/inspeksimtd.routes");
+const inspeksiplant = require("./routes/inspeksi/inspeksiplant.routes");
+const inspeksichp = require("./routes/inspeksi/inspeksichp.routes");
+const inspeksifasilitasbbm = require("./routes/inspeksi/inspeksifasilitasbbm.routes");
 
-const p2hlv = require('./routes/p2h/p2hlv.routes');
-const p2hbus = require('./routes/p2h/p2hbus.routes');
-const p2hdt = require('./routes/p2h/p2hdt.routes');
-const p2hexca = require('./routes/p2h/p2hexca.routes');
-const p2hdozer = require('./routes/p2h/p2hdozer.routes');
-const p2hgrader = require('./routes/p2h/p2hgrader.routes');
-const p2htowerlamp = require('./routes/p2h/p2htowerlamp.routes');
-const p2hcrane = require('./routes/p2h/p2hcrane.routes');
-const p2hforklift = require('./routes/p2h/p2hforklift.routes');
-const p2htruck = require('./routes/p2h/p2htruck.routes');
-const p2hwheelloader = require('./routes/p2h/p2hwheelloader.routes');
-const p2hwatertruck = require('./routes/p2h/p2hwatertruck.routes');
-const p2hwaterpump = require('./routes/p2h/p2hwaterpump.routes');
-const p2hservicetruck = require('./routes/p2h/p2hservicetruck.routes');
-const p2hcompactor = require('./routes/p2h/p2hcompactor.routes');
-const p2hfueltruck = require('./routes/p2h/p2hfueltruck.routes');
+const p2hlv = require("./routes/p2h/p2hlv.routes");
+const p2hbus = require("./routes/p2h/p2hbus.routes");
+const p2hdt = require("./routes/p2h/p2hdt.routes");
+const p2hexca = require("./routes/p2h/p2hexca.routes");
+const p2hdozer = require("./routes/p2h/p2hdozer.routes");
+const p2hgrader = require("./routes/p2h/p2hgrader.routes");
+const p2htowerlamp = require("./routes/p2h/p2htowerlamp.routes");
+const p2hcrane = require("./routes/p2h/p2hcrane.routes");
+const p2hforklift = require("./routes/p2h/p2hforklift.routes");
+const p2htruck = require("./routes/p2h/p2htruck.routes");
+const p2hwheelloader = require("./routes/p2h/p2hwheelloader.routes");
+const p2hwatertruck = require("./routes/p2h/p2hwatertruck.routes");
+const p2hwaterpump = require("./routes/p2h/p2hwaterpump.routes");
+const p2hservicetruck = require("./routes/p2h/p2hservicetruck.routes");
+const p2hcompactor = require("./routes/p2h/p2hcompactor.routes");
+const p2hfueltruck = require("./routes/p2h/p2hfueltruck.routes");
 
-const dailyPlanRoutes = require('./routes/event/hsesdailyplan.routes');
-const buletinRoutes = require('./routes/event/hsesbuletin.routes');
+const dailyPlanRoutes = require("./routes/event/hsesdailyplan.routes");
+const buletinRoutes = require("./routes/event/hsesbuletin.routes");
 
-const authRoutes = require('./routes/auth.routes');
+const authRoutes = require("./routes/auth.routes");
 
-const notificationRoutes = require('./routes/notification.routes');
-const excelAccessRoutes = require('./routes/excelaccess.routes');
-const excelAccessRequestRoutes = require('./routes/excelaccessrequest.routes');
+const notificationRoutes = require("./routes/notification.routes");
+const excelAccessRoutes = require("./routes/excelaccess.routes");
+const excelAccessRequestRoutes = require("./routes/excelaccessrequest.routes");
 
-const dropdownRoutes = require('./routes/dropdown.routes');
+const dropdownRoutes = require("./routes/dropdown.routes");
 
-app.use('/auth', authRoutes);
+const {
+  createAuditLog,
+  sanitizePayload,
+} = require("./helpers/auditLog.helper");
 
-app.use('/api/events', eventRoutes);
-app.use('/forgot-password', forgotLimiter, forgotPasswordRoutes);
-app.use('/users', authMiddleware, mustChangePasswordGuard, userRoutes);
+app.use("/auth", authRoutes);
 
-app.use('/lpi', lpiRoutes);
-app.use('/hazard', hazardRoutes);
-app.use('/p5m', p5mRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/forgot-password", forgotLimiter, forgotPasswordRoutes);
+app.use("/users", authMiddleware, mustChangePasswordGuard, userRoutes);
 
-app.use('/inspeksi_jalan_tambang', inspeksiJalanTambangRoutes);
-app.use('/inspeksi_kantor', inspeksikantor);
-app.use('/inspeksi_mtd', inspeksimtd);
-app.use('/inspeksi_plant', inspeksiplant);
-app.use('/inspeksi_chp', inspeksichp);
-app.use('/inspeksi_fasilitas_bbm', inspeksifasilitasbbm);
+app.use("/lpi", lpiRoutes);
+app.use("/hazard", hazardRoutes);
+app.use("/p5m", p5mRoutes);
 
-app.use('/p2h_lv', p2hlv);
-app.use('/p2h_bus', p2hbus);
-app.use('/p2h_dt', p2hdt);
-app.use('/p2h_exca', p2hexca);
-app.use('/p2h_dozer', p2hdozer);
-app.use('/p2h_grader', p2hgrader);
-app.use('/p2h_towerlamp', p2htowerlamp);
-app.use('/p2h_crane', p2hcrane);
-app.use('/p2h_forklift', p2hforklift);
-app.use('/p2h_truck', p2htruck);
-app.use('/p2h_wheelloader', p2hwheelloader);
-app.use('/p2h_water_truck', p2hwatertruck);
-app.use('/p2h_water_pump', p2hwaterpump);
-app.use('/p2h_service_truck', p2hservicetruck);
-app.use('/p2h_compactor', p2hcompactor);
-app.use('/p2h_fuel_truck', p2hfueltruck);
+app.use("/inspeksi_jalan_tambang", inspeksiJalanTambangRoutes);
+app.use("/inspeksi_kantor", inspeksikantor);
+app.use("/inspeksi_mtd", inspeksimtd);
+app.use("/inspeksi_plant", inspeksiplant);
+app.use("/inspeksi_chp", inspeksichp);
+app.use("/inspeksi_fasilitas_bbm", inspeksifasilitasbbm);
 
-app.use('/hses_daily_plan', dailyPlanRoutes);
-app.use('/hses_buletin', buletinRoutes);
+app.use("/p2h_lv", p2hlv);
+app.use("/p2h_bus", p2hbus);
+app.use("/p2h_dt", p2hdt);
+app.use("/p2h_exca", p2hexca);
+app.use("/p2h_dozer", p2hdozer);
+app.use("/p2h_grader", p2hgrader);
+app.use("/p2h_towerlamp", p2htowerlamp);
+app.use("/p2h_crane", p2hcrane);
+app.use("/p2h_forklift", p2hforklift);
+app.use("/p2h_truck", p2htruck);
+app.use("/p2h_wheelloader", p2hwheelloader);
+app.use("/p2h_water_truck", p2hwatertruck);
+app.use("/p2h_water_pump", p2hwaterpump);
+app.use("/p2h_service_truck", p2hservicetruck);
+app.use("/p2h_compactor", p2hcompactor);
+app.use("/p2h_fuel_truck", p2hfueltruck);
 
-app.use('/notifications', notificationRoutes);
-app.use('/excel-access', excelAccessRoutes);
-app.use('/excel-access-requests', excelAccessRequestRoutes);
+app.use("/hses_daily_plan", dailyPlanRoutes);
+app.use("/hses_buletin", buletinRoutes);
 
-app.use('/api/master', dropdownRoutes);
+app.use("/notifications", notificationRoutes);
+app.use("/excel-access", excelAccessRoutes);
+app.use("/excel-access-requests", excelAccessRequestRoutes);
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Backend API running' });
+app.use("/api/master", dropdownRoutes);
+
+app.get("/", (req, res) => {
+  res.json({ message: "Backend API running" });
 });
 
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id, fcm_token } = req.body;
+    const { name, password, site_id, department_id, device_id, fcm_token } =
+      req.body;
 
     if (!name || !password || !site_id || !department_id || !device_id) {
-      return res.status(400).json({ message: 'Data login tidak lengkap' });
+      return res.status(400).json({ message: "Data login tidak lengkap" });
     }
 
     /* ================= CARI USER ================= */
@@ -163,7 +174,25 @@ app.post('/login', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(401).json({ message: 'User / site / department tidak cocok' });
+      await createAuditLog(client, {
+        userName: name,
+        siteId: site_id,
+        departmentId: department_id,
+        action: "LOGIN_FAILED",
+        module: "Auth",
+        method: req.method,
+        endpoint: req.originalUrl,
+        description: `Percobaan login gagal: user/site/department tidak cocok`,
+        requestPayload: sanitizePayload(req.body),
+        responseStatus: 401,
+        ipAddress: req.ip,
+        deviceId: device_id,
+        userAgent: req.headers["user-agent"],
+      });
+
+      return res
+        .status(401)
+        .json({ message: "User / site / department tidak cocok" });
     }
 
     const user = result.rows[0];
@@ -171,14 +200,31 @@ app.post('/login', async (req, res) => {
     /* ================= CEK PASSWORD ================= */
     const isMatch = bcrypt.compareSync(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Password salah' });
-    }
+      await createAuditLog(client, {
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role_name?.toLowerCase(),
+        siteId: user.site_id,
+        departmentId: user.department_id,
+        action: "LOGIN_FAILED",
+        module: "Auth",
+        method: req.method,
+        endpoint: req.originalUrl,
+        description: `${user.name} gagal login: password salah`,
+        requestPayload: sanitizePayload(req.body),
+        responseStatus: 401,
+        ipAddress: req.ip,
+        deviceId: device_id,
+        userAgent: req.headers["user-agent"],
+      });
 
-    const email = (user.email ?? '').toString().trim();
-    if (email === '') {
+      return res.status(401).json({ message: "Password salah" });
+    }
+    const email = (user.email ?? "").toString().trim();
+    if (email === "") {
       return res.status(428).json({
-        code: 'EMAIL_REQUIRED',
-        message: 'Email wajib diisi untuk fitur lupa password & OTP.',
+        code: "EMAIL_REQUIRED",
+        message: "Email wajib diisi untuk fitur lupa password & OTP.",
       });
     }
 
@@ -199,7 +245,7 @@ app.post('/login', async (req, res) => {
 
     if (activeSession.rowCount > 0) {
       return res.status(409).json({
-        message: 'Akun ini sedang login di device lain',
+        message: "Akun ini sedang login di device lain",
         otp_required: true,
       });
     }
@@ -228,7 +274,7 @@ app.post('/login', async (req, res) => {
         department_id: user.department_id,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '3d' },
+      { expiresIn: "3d" },
     );
 
     /* ================= SIMPAN SESSION ================= */
@@ -242,10 +288,10 @@ app.post('/login', async (req, res) => {
     );
 
     /* ================= SIMPAN DEVICE + FCM ================= */
-    const cleanToken = (fcm_token ?? '').toString().trim();
+    const cleanToken = (fcm_token ?? "").toString().trim();
 
-    if (cleanToken !== '') {
-      await client.query('BEGIN');
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
       try {
         // Lepaskan token dari user lain
         await client.query(
@@ -270,13 +316,31 @@ app.post('/login', async (req, res) => {
           [user.id, device_id, cleanToken],
         );
 
-        await client.query('COMMIT');
-        console.log('✅ Device + FCM saved:', user.id);
+        await client.query("COMMIT");
+        console.log("✅ Device + FCM saved:", user.id);
       } catch (e) {
-        await client.query('ROLLBACK');
-        console.error('❌ Save device token error:', e);
+        await client.query("ROLLBACK");
+        console.error("❌ Save device token error:", e);
       }
     }
+
+    await createAuditLog(client, {
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role_name?.toLowerCase(),
+      siteId: user.site_id,
+      departmentId: user.department_id,
+      action: "LOGIN",
+      module: "Auth",
+      method: req.method,
+      endpoint: req.originalUrl,
+      description: `${user.name} berhasil login`,
+      requestPayload: sanitizePayload(req.body),
+      responseStatus: 200,
+      ipAddress: req.ip,
+      deviceId: device_id,
+      userAgent: req.headers["user-agent"],
+    });
 
     return res.json({
       token,
@@ -292,26 +356,41 @@ app.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ message: 'Login gagal' });
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Login gagal" });
   } finally {
     client.release();
   }
 });
 
-app.post('/login/set-email', async (req, res) => {
+app.post("/login/set-email", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id, email, fcm_token } = req.body;
+    const {
+      name,
+      password,
+      site_id,
+      department_id,
+      device_id,
+      email,
+      fcm_token,
+    } = req.body;
 
-    if (!name || !password || !site_id || !department_id || !device_id || !email) {
-      return res.status(400).json({ message: 'Data tidak lengkap' });
+    if (
+      !name ||
+      !password ||
+      !site_id ||
+      !department_id ||
+      !device_id ||
+      !email
+    ) {
+      return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
     const cleanEmail = String(email).trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      return res.status(400).json({ message: 'Format email tidak valid' });
+      return res.status(400).json({ message: "Format email tidak valid" });
     }
 
     // 1) cari user + role + email
@@ -334,19 +413,21 @@ app.post('/login/set-email', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(401).json({ message: 'User / site / department tidak cocok' });
+      return res
+        .status(401)
+        .json({ message: "User / site / department tidak cocok" });
     }
 
     const user = result.rows[0];
 
     // 2) cek password
     if (!bcrypt.compareSync(password, user.password)) {
-      return res.status(401).json({ message: 'Password salah' });
+      return res.status(401).json({ message: "Password salah" });
     }
 
     // 3) update email hanya jika masih kosong
-    const existing = (user.email ?? '').toString().trim();
-    if (existing === '') {
+    const existing = (user.email ?? "").toString().trim();
+    if (existing === "") {
       try {
         await client.query(
           `
@@ -359,8 +440,10 @@ app.post('/login/set-email', async (req, res) => {
         );
       } catch (e) {
         // unique violation
-        if (e.code === '23505') {
-          return res.status(409).json({ message: 'Email sudah digunakan akun lain' });
+        if (e.code === "23505") {
+          return res
+            .status(409)
+            .json({ message: "Email sudah digunakan akun lain" });
         }
         throw e;
       }
@@ -384,7 +467,7 @@ app.post('/login/set-email', async (req, res) => {
     if (activeSession.rowCount > 0) {
       // ✅ tetap konsisten: ini akan memicu flow OTP takeover di app
       return res.status(409).json({
-        message: 'Akun ini sedang login di device lain',
+        message: "Akun ini sedang login di device lain",
         otp_required: true,
       });
     }
@@ -413,7 +496,7 @@ app.post('/login/set-email', async (req, res) => {
         department_id: user.department_id,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '3d' },
+      { expiresIn: "3d" },
     );
 
     // 7) simpan session baru
@@ -427,9 +510,9 @@ app.post('/login/set-email', async (req, res) => {
     );
 
     // 8) simpan device + FCM (copy dari /login)
-    const cleanToken = (fcm_token ?? '').toString().trim();
-    if (cleanToken !== '') {
-      await client.query('BEGIN');
+    const cleanToken = (fcm_token ?? "").toString().trim();
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
       try {
         await client.query(
           `
@@ -452,9 +535,9 @@ app.post('/login/set-email', async (req, res) => {
           [user.id, device_id, cleanToken],
         );
 
-        await client.query('COMMIT');
+        await client.query("COMMIT");
       } catch (e) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
       }
     }
 
@@ -473,20 +556,20 @@ app.post('/login/set-email', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('set-email error:', err);
-    return res.status(500).json({ message: 'Gagal menyimpan email' });
+    console.error("set-email error:", err);
+    return res.status(500).json({ message: "Gagal menyimpan email" });
   } finally {
     client.release();
   }
 });
 
-app.post('/login-force/request-otp', async (req, res) => {
+app.post("/login-force/request-otp", async (req, res) => {
   const client = await pool.connect();
   try {
     const { name, password, site_id, department_id, device_id } = req.body;
 
     if (!name || !password || !site_id || !department_id || !device_id) {
-      return res.status(400).json({ message: 'Data tidak lengkap' });
+      return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
     const userRes = await client.query(
@@ -502,16 +585,20 @@ app.post('/login-force/request-otp', async (req, res) => {
     );
 
     if (userRes.rowCount === 0) {
-      return res.status(401).json({ message: 'User / site / department tidak cocok' });
+      return res
+        .status(401)
+        .json({ message: "User / site / department tidak cocok" });
     }
 
     const user = userRes.rows[0];
     if (!bcrypt.compareSync(password, user.password)) {
-      return res.status(401).json({ message: 'Password salah' });
+      return res.status(401).json({ message: "Password salah" });
     }
 
     if (!user.email) {
-      return res.status(400).json({ message: 'Email belum terdaftar. Hubungi admin.' });
+      return res
+        .status(400)
+        .json({ message: "Email belum terdaftar. Hubungi admin." });
     }
 
     // Pastikan konflik masih "fresh" (sesuai policy kamu)
@@ -530,7 +617,7 @@ app.post('/login-force/request-otp', async (req, res) => {
     );
 
     if (activeSession.rowCount === 0) {
-      return res.status(400).json({ message: 'Tidak ada konflik session' });
+      return res.status(400).json({ message: "Tidak ada konflik session" });
     }
 
     // Rate limit resend: minimal 60 detik sekali (opsional tapi recommended)
@@ -548,7 +635,9 @@ app.post('/login-force/request-otp', async (req, res) => {
     );
 
     if (recentOtp.rowCount > 0) {
-      return res.status(429).json({ message: 'OTP baru saja dikirim. Coba lagi sebentar.' });
+      return res
+        .status(429)
+        .json({ message: "OTP baru saja dikirim. Coba lagi sebentar." });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit
@@ -579,22 +668,37 @@ app.post('/login-force/request-otp', async (req, res) => {
       minutes: 5,
     });
 
-    return res.json({ message: 'OTP terkirim ke email terdaftar' });
+    return res.json({ message: "OTP terkirim ke email terdaftar" });
   } catch (err) {
-    console.error('request-otp error:', err);
-    return res.status(500).json({ message: 'Gagal mengirim OTP' });
+    console.error("request-otp error:", err);
+    return res.status(500).json({ message: "Gagal mengirim OTP" });
   } finally {
     client.release();
   }
 });
 
-app.post('/login-force/confirm', async (req, res) => {
+app.post("/login-force/confirm", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, password, site_id, department_id, device_id, otp, fcm_token } = req.body;
+    const {
+      name,
+      password,
+      site_id,
+      department_id,
+      device_id,
+      otp,
+      fcm_token,
+    } = req.body;
 
-    if (!name || !password || !site_id || !department_id || !device_id || !otp) {
-      return res.status(400).json({ message: 'Data tidak lengkap' });
+    if (
+      !name ||
+      !password ||
+      !site_id ||
+      !department_id ||
+      !device_id ||
+      !otp
+    ) {
+      return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
     const result = await client.query(
@@ -615,12 +719,14 @@ app.post('/login-force/confirm', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(401).json({ message: 'User / site / department tidak cocok' });
+      return res
+        .status(401)
+        .json({ message: "User / site / department tidak cocok" });
     }
 
     const user = result.rows[0];
     if (!bcrypt.compareSync(password, user.password)) {
-      return res.status(401).json({ message: 'Password salah' });
+      return res.status(401).json({ message: "Password salah" });
     }
 
     // Ambil OTP aktif terbaru
@@ -639,26 +745,32 @@ app.post('/login-force/confirm', async (req, res) => {
     );
 
     if (otpRes.rowCount === 0) {
-      return res.status(400).json({ message: 'OTP tidak ditemukan / sudah kadaluarsa' });
+      return res
+        .status(400)
+        .json({ message: "OTP tidak ditemukan / sudah kadaluarsa" });
     }
 
     const row = otpRes.rows[0];
 
     if (row.attempts >= 5) {
-      return res.status(429).json({ message: 'Terlalu banyak percobaan OTP' });
+      return res.status(429).json({ message: "Terlalu banyak percobaan OTP" });
     }
 
     const ok = bcrypt.compareSync(String(otp), row.otp_hash);
 
-    await client.query(`UPDATE login_takeover_otps SET attempts = attempts + 1 WHERE id = $1`, [
-      row.id,
-    ]);
+    await client.query(
+      `UPDATE login_takeover_otps SET attempts = attempts + 1 WHERE id = $1`,
+      [row.id],
+    );
 
     if (!ok) {
-      return res.status(400).json({ message: 'OTP salah' });
+      return res.status(400).json({ message: "OTP salah" });
     }
 
-    await client.query(`UPDATE login_takeover_otps SET used_at = NOW() WHERE id = $1`, [row.id]);
+    await client.query(
+      `UPDATE login_takeover_otps SET used_at = NOW() WHERE id = $1`,
+      [row.id],
+    );
 
     // Matikan session lama (force takeover)
     await client.query(
@@ -684,7 +796,7 @@ app.post('/login-force/confirm', async (req, res) => {
         department_id: user.department_id,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '3d' },
+      { expiresIn: "3d" },
     );
 
     // Insert session baru
@@ -700,9 +812,9 @@ app.post('/login-force/confirm', async (req, res) => {
     // (opsional) simpan device+fcm sama seperti di /login kamu
     // Kalau mau konsisten, copy blok simpan FCM dari /login ke sini juga.
     // Aku taruh versi ringkas yang sama patternnya:
-    const cleanToken = (fcm_token ?? '').toString().trim();
-    if (cleanToken !== '') {
-      await client.query('BEGIN');
+    const cleanToken = (fcm_token ?? "").toString().trim();
+    if (cleanToken !== "") {
+      await client.query("BEGIN");
       try {
         await client.query(
           `
@@ -725,9 +837,9 @@ app.post('/login-force/confirm', async (req, res) => {
           [user.id, device_id, cleanToken],
         );
 
-        await client.query('COMMIT');
+        await client.query("COMMIT");
       } catch (e) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
       }
     }
 
@@ -745,8 +857,8 @@ app.post('/login-force/confirm', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('confirm takeover error:', err);
-    return res.status(500).json({ message: 'Gagal verifikasi OTP' });
+    console.error("confirm takeover error:", err);
+    return res.status(500).json({ message: "Gagal verifikasi OTP" });
   } finally {
     client.release();
   }
@@ -775,15 +887,15 @@ setInterval(
         AND last_seen < NOW() - INTERVAL '3 days'
     `);
 
-      console.log('🛑 Auto logout berjalan normal');
+      console.log("🛑 Auto logout berjalan normal");
     } catch (err) {
-      console.error('Auto logout error:', err);
+      console.error("Auto logout error:", err);
     }
   },
   1000 * 60 * 5,
 );
 
-app.post('/logout', authMiddleware, async (req, res) => {
+app.post("/logout", authMiddleware, async (req, res) => {
   try {
     const token = req.token;
 
@@ -803,20 +915,38 @@ WHERE token = $1
 
     if (result.rowCount === 0) {
       return res.status(400).json({
-        message: 'Session tidak ditemukan / sudah logout',
+        message: "Session tidak ditemukan / sudah logout",
       });
     }
 
-    return res.json({ message: 'Logout berhasil' });
+    await createAuditLog(pool, {
+      userId: req.user.id,
+      userName: req.user.name,
+      userRole: req.user.role,
+      siteId: req.user.site_id,
+      departmentId: req.user.department_id,
+      action: "LOGOUT",
+      module: "Auth",
+      method: req.method,
+      endpoint: req.originalUrl,
+      description: `${req.user.name} berhasil logout`,
+      requestPayload: null,
+      responseStatus: 200,
+      ipAddress: req.ip,
+      deviceId: req.headers["x-device-id"],
+      userAgent: req.headers["user-agent"],
+    });
+
+    return res.json({ message: "Logout berhasil" });
   } catch (err) {
-    console.error('Logout error:', err);
-    return res.status(500).json({ message: 'Logout gagal' });
+    console.error("Logout error:", err);
+    return res.status(500).json({ message: "Logout gagal" });
   }
 });
 
-app.get('/sites', async (req, res) => {
+app.get("/sites", async (req, res) => {
   try {
-    console.log('🔥 HIT /sites');
+    console.log("🔥 HIT /sites");
 
     const result = await pool.query(
       `SELECT id, site_name
@@ -827,16 +957,18 @@ app.get('/sites', async (req, res) => {
 
     res.json(result.rows.map((r) => ({ id: r.id, name: r.site_name })));
   } catch (err) {
-    console.error('ERROR GET /sites:', err);
-    res.status(500).json({ message: 'Gagal mengambil sites', error: err.message });
+    console.error("ERROR GET /sites:", err);
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil sites", error: err.message });
   }
 });
 
-app.get('/departments', async (req, res) => {
+app.get("/departments", async (req, res) => {
   const { site_id } = req.query;
 
   if (!site_id) {
-    return res.status(400).json({ message: 'site_id wajib diisi' });
+    return res.status(400).json({ message: "site_id wajib diisi" });
   }
 
   try {
@@ -850,12 +982,12 @@ app.get('/departments', async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error('ERROR GET /departments:', err);
-    res.status(500).json({ message: 'Gagal mengambil department' });
+    console.error("ERROR GET /departments:", err);
+    res.status(500).json({ message: "Gagal mengambil department" });
   }
 });
 
-app.get('/validate-session', authMiddleware, async (req, res) => {
+app.get("/validate-session", authMiddleware, async (req, res) => {
   return res.json({
     valid: true,
     user: req.user,
@@ -885,9 +1017,9 @@ setInterval(
         AND last_seen < NOW() - INTERVAL '3 days'
     `);
 
-      console.log('🛑 Auto logout berjalan normal');
+      console.log("🛑 Auto logout berjalan normal");
     } catch (err) {
-      console.error('Auto logout error:', err);
+      console.error("Auto logout error:", err);
     }
   },
   1000 * 60 * 5,
