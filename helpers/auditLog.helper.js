@@ -1,20 +1,20 @@
 function sanitizePayload(payload = {}) {
   const hiddenFields = [
-    'password',
-    'token',
-    'access_token',
-    'refresh_token',
-    'authorization',
-    'otp',
-    'pin',
-    'fcm_token',
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "authorization",
+    "otp",
+    "pin",
+    "fcm_token",
   ];
 
   const cleanPayload = { ...payload };
 
   hiddenFields.forEach((field) => {
     if (cleanPayload[field]) {
-      cleanPayload[field] = '[HIDDEN]';
+      cleanPayload[field] = "[HIDDEN]";
     }
   });
 
@@ -47,9 +47,7 @@ async function createAuditLog(clientOrPool, data) {
       user_name,
       user_role,
       site_id,
-      site_name,
       department_id,
-      department_name,
       action,
       module,
       method,
@@ -64,10 +62,9 @@ async function createAuditLog(clientOrPool, data) {
     VALUES (
       $1, $2, $3,
       $4, $5,
-      $6, $7,
-      $8, $9, $10,
-      $11, $12, $13,
-      $14, $15, $16, $17
+      $6, $7, $8,
+      $9, $10, $11,
+      $12, $13, $14, $15
     )
     `,
     [
