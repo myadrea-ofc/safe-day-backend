@@ -11,21 +11,24 @@ const bcrypt = require("bcryptjs");
 const authMiddleware = require("../middlewares/auth.middleware");
 const allowRoles = require("../middlewares/role.middleware");
 const userController = require("../controllers/user.controller");
+const auditMiddleware = require("../middlewares/audit.middleware");
 
 router.put(
   "/change-password",
+  auditMiddleware("Change Password"),
   userController.changePassword
 );
 
 router.post(
   "/",
   allowRoles("admin", "superadmin"),
+  auditMiddleware("Create User"),
   userController.createUser
 );
 
 router.put(
   "/:id/role",
-  
+  auditMiddleware("Update User Role"),
   allowRoles("admin", "superadmin"),
   async (req, res) => {
     try {
@@ -123,6 +126,7 @@ router.get(
 router.get(
   "/",
   allowRoles("admin", "superadmin"),
+  auditMiddleware("User Management"),
   async (req, res) => {
     try {
       const {
@@ -199,7 +203,7 @@ router.get(
 );
 
 
-router.post("/fcm-token", async (req, res) => {
+router.post("/fcm-token", auditMiddleware("FCM Token"), async (req, res) => {
   const { fcm_token } = req.body;
   const deviceId = req.headers["x-device-id"];
 

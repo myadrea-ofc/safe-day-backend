@@ -3,22 +3,24 @@ const bcrypt = require("bcryptjs");
 const pool = require("../config/db");
 const { sendNewPasswordEmail } = require("../config/mailer");
 const { enqueueEmailJob } = require("../utils/emailQueue");
+const {
+  createAuditLog,
+  sanitizePayload,
+} = require("../helpers/auditLog.helper");
 
 const router = express.Router();
 
 function generateNewPassword() {
-  // ✅ kamu bilang akan pakai 12 template password sendiri
   const templates = [
     "Pass123!",
     "Pass321!",
-    "Safety12!",
-    "SafeDay#1",
-    "Borneo@12",
-    // tambah sampai 12
+    "Safety1234",
+    "SafeDay7878",
+    "Borneo789",
   ];
 
   const base = templates[Math.floor(Math.random() * templates.length)];
-  const suffix = String(Math.floor(Math.random() * 9000) + 1000); // 4 digit biar lebih unik
+  const suffix = String(Math.floor(Math.random() * 9000) + 1000); 
   return `${base}${suffix}`;
 }
 
@@ -28,6 +30,22 @@ router.post("/", async (req, res) => {
     const { site_id, department_id, name, email } = req.body;
 
     if (!site_id || !department_id || !name || !email) {
+      await createAuditLog(client, {
+        userName: name || null,
+        siteId: site_id || null,
+        departmentId: department_id || null,
+        action: "FORGOT_PASSWORD_FAILED",
+        module: "Auth",
+        method: req.method,
+        endpoint: req.originalUrl,
+        description: "Forgot password gagal: data tidak lengkap",
+        requestPayload: sanitizePayload(req.body),
+        responseStatus: 400,
+        ipAddress: req.ip,
+        deviceId: req.headers["x-device-id"],
+        userAgent: req.headers["user-agent"],
+      });
+
       return res.status(400).json({ message: "Data tidak lengkap" });
     }
 
@@ -50,10 +68,26 @@ router.post("/", async (req, res) => {
     );
 
     if (userRes.rowCount === 0) {
-  return res.status(400).json({
-    message: "Data tidak valid. Mohon cek Site, Department, Nama, dan Email."
-  });
-}
+      await createAuditLog(client, {
+        userName: name,
+        siteId: site_id,
+        departmentId: department_id,
+        action: "FORGOT_PASSWORD_FAILED",
+        module: "Auth",
+        method: req.method,
+        endpoint: req.originalUrl,
+        description: "Forgot password gagal: data tidak cocok",
+        requestPayload: sanitizePayload(req.body),
+        responseStatus: 400,
+        ipAddress: req.ip,
+        deviceId: req.headers["x-device-id"],
+        userAgent: req.headers["user-agent"],
+      });
+
+      return res.status(400).json({
+        message: "Data tidak valid. Mohon cek Site, Department, Nama, dan Email."
+      });
+    }
 
     const user = userRes.rows[0];
 
@@ -72,6 +106,23 @@ router.post("/", async (req, res) => {
     );
 
     if (recentReq.rowCount > 0) {
+      await createAuditLog(client, {
+        userId: user.id,
+        userName: user.name,
+        siteId: site_id,
+        departmentId: department_id,
+        action: "FORGOT_PASSWORD_COOLDOWN",
+        module: "Auth",
+        method: req.method,
+        endpoint: req.originalUrl,
+        description: `${user.name} mencoba forgot password terlalu cepat`,
+        requestPayload: sanitizePayload(req.body),
+        responseStatus: 200,
+        ipAddress: req.ip,
+        deviceId: req.headers["x-device-id"],
+        userAgent: req.headers["user-agent"],
+      });
+
       return res.status(200).json({ message: "Permintaan terlalu cepat. Coba lagi sebentar." });
     }
 
@@ -105,6 +156,23 @@ router.post("/", async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    await createAuditLog(client, {
+      userId: user.id,
+      userName: user.name,
+      siteId: site_id,
+      departmentId: department_id,
+      action: "FORGOT_PASSWORD",
+      module: "Auth",
+      method: req.method,
+      endpoint: req.originalUrl,
+      description: `${user.name} berhasil request forgot password`,
+      requestPayload: sanitizePayload(req.body),
+      responseStatus: 200,
+      ipAddress: req.ip,
+      deviceId: req.headers["x-device-id"],
+      userAgent: req.headers["user-agent"],
+    });
 
     // 5) Kirim email lewat queue (tanpa Redis)
     await enqueueEmailJob(() =>

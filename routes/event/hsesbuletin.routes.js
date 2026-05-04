@@ -11,6 +11,7 @@ const pool = require("../../config/db");
 
 const authMiddleware = require("../../middlewares/auth.middleware");
 const allowRoles = require("../../middlewares/role.middleware");
+const auditMiddleware = require("../../middlewares/audit.middleware");
 
 if (!fs.existsSync("uploads")) fs.mkdirSync("uploads");
 
@@ -60,25 +61,36 @@ router.post(
   authMiddleware,
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
+  auditMiddleware("Buletin"),
   async (req, res) => {
     try {
       const { judul, subJudul, deskripsi, is_for_all_sites } = req.body;
-      const isForAllSites = is_for_all_sites === "1" || is_for_all_sites === true;
+      const isForAllSites =
+        is_for_all_sites === "1" || is_for_all_sites === true;
 
       // ======== Handle sites =========
       let sites = req.body.site_ids;
 
       if (typeof sites === "string") {
-        try { sites = JSON.parse(sites); }
-        catch { sites = [sites]; }
+        try {
+          sites = JSON.parse(sites);
+        } catch {
+          sites = [sites];
+        }
       }
 
       if (!Array.isArray(sites)) sites = sites ? [sites] : [];
 
       sites = sites.map(Number).filter((id) => !isNaN(id));
 
-      if (req.user.role === "superadmin" && sites.length === 0 && !isForAllSites) {
-        return res.status(400).json({ message: "Minimal 1 site harus dipilih" });
+      if (
+        req.user.role === "superadmin" &&
+        sites.length === 0 &&
+        !isForAllSites
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Minimal 1 site harus dipilih" });
       }
 
       if (req.user.role === "admin") {
@@ -103,7 +115,7 @@ router.post(
           req.user.id,
           departmentId,
           siteId,
-        ]
+        ],
       );
 
       const buletinId = buletin.rows[0].id;
@@ -111,7 +123,7 @@ router.post(
       for (const sId of sites) {
         await pool.query(
           `INSERT INTO hses_buletin_sites (buletin_id, site_id) VALUES ($1,$2)`,
-          [buletinId, sId]
+          [buletinId, sId],
         );
       }
 
@@ -131,10 +143,10 @@ router.post(
       console.error("CREATE BULETIN ERROR:", err);
       return res.status(500).json({ message: "Insert failed" });
     }
-  }
+  },
 );
 
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", authMiddleware, auditMiddleware("Buletin"), async (req, res) => {
   try {
     const { role, site_id, id: user_id } = req.user;
     const params = [user_id];
@@ -189,12 +201,18 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.single("gambar"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { judul, subJudul, deskripsi, site_ids } = req.body;
+router.put(
+  "/:id",
+  authMiddleware,
+  allowRoles("admin", "superadmin"),
+  upload.single("gambar"),
+  auditMiddleware("Buletin"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { judul, subJudul, deskripsi, site_ids } = req.body;
 
-    let query = `
+      let query = `
       UPDATE hses_buletin
       SET
         judul = $1,
@@ -205,12 +223,12 @@ router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.sin
         AND deleted_at IS NULL
     `;
 
-    const params = req.file
-      ? [judul, subJudul, deskripsi, req.file.filename, id]
-      : [judul, subJudul, deskripsi, id];
+      const params = req.file
+        ? [judul, subJudul, deskripsi, req.file.filename, id]
+        : [judul, subJudul, deskripsi, id];
 
-    if (req.user.role === "admin") {
-      query += `
+      if (req.user.role === "admin") {
+        query += `
         AND created_by = $${params.length + 1}
         AND EXISTS (
           SELECT 1 FROM hses_buletin_sites bs
@@ -218,49 +236,62 @@ router.put("/:id", authMiddleware, allowRoles("admin", "superadmin"), upload.sin
             AND bs.site_id = $${params.length + 2}
         )
       `;
-      params.push(req.user.id);
-      params.push(req.user.site_id);
-    }
-
-    query += " RETURNING *";
-    const result = await pool.query(query, params);
-
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: "Data tidak ditemukan atau tidak punya akses" });
-
-    if (site_ids) {
-      let sites = Array.isArray(site_ids) ? site_ids.map(Number) : [Number(site_ids)];
-      if (req.user.role === "admin") sites = [req.user.site_id];
-
-      await pool.query(`DELETE FROM hses_buletin_sites WHERE buletin_id = $1`, [id]);
-      for (const sId of sites) {
-        await pool.query(
-          `INSERT INTO hses_buletin_sites (buletin_id, site_id) VALUES ($1,$2)`,
-          [id, sId]
-        );
+        params.push(req.user.id);
+        params.push(req.user.site_id);
       }
+
+      query += " RETURNING *";
+      const result = await pool.query(query, params);
+
+      if (result.rowCount === 0)
+        return res
+          .status(404)
+          .json({ message: "Data tidak ditemukan atau tidak punya akses" });
+
+      if (site_ids) {
+        let sites = Array.isArray(site_ids)
+          ? site_ids.map(Number)
+          : [Number(site_ids)];
+        if (req.user.role === "admin") sites = [req.user.site_id];
+
+        await pool.query(
+          `DELETE FROM hses_buletin_sites WHERE buletin_id = $1`,
+          [id],
+        );
+        for (const sId of sites) {
+          await pool.query(
+            `INSERT INTO hses_buletin_sites (buletin_id, site_id) VALUES ($1,$2)`,
+            [id, sId],
+          );
+        }
+      }
+
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error("UPDATE BULETIN ERROR:", err);
+      res.status(500).json({ message: "Update failed" });
     }
+  },
+);
 
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("UPDATE BULETIN ERROR:", err);
-    res.status(500).json({ message: "Update failed" });
-  }
-});
-
-router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    let query = `
+router.delete(
+  "/:id",
+  authMiddleware,
+  allowRoles("admin", "superadmin"),
+  auditMiddleware("Buletin"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      let query = `
       UPDATE hses_buletin
       SET deleted_at = NOW()
       WHERE id = $1
         AND deleted_at IS NULL
     `;
-    const params = [id];
+      const params = [id];
 
-    if (req.user.role === "admin") {
-      query += `
+      if (req.user.role === "admin") {
+        query += `
         AND created_by = $${params.length + 1}
         AND EXISTS (
           SELECT 1 FROM hses_buletin_sites bs
@@ -268,28 +299,36 @@ router.delete("/:id", authMiddleware, allowRoles("admin", "superadmin"), async (
             AND bs.site_id = $${params.length + 2}
         )
       `;
-      params.push(req.user.id);
-      params.push(req.user.site_id);
+        params.push(req.user.id);
+        params.push(req.user.site_id);
+      }
+
+      const result = await pool.query(query, params);
+      if (result.rowCount === 0)
+        return res
+          .status(404)
+          .json({ message: "Data tidak ditemukan atau tidak punya akses" });
+
+      res.json({ message: "Deleted (soft)" });
+    } catch (err) {
+      console.error("DELETE BULETIN ERROR:", err);
+      res.status(500).json({ message: "Delete failed" });
     }
+  },
+);
 
-    const result = await pool.query(query, params);
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: "Data tidak ditemukan atau tidak punya akses" });
+router.post(
+  "/:id/review",
+  authMiddleware,
+  auditMiddleware("Buletin Review"),
+  allowRoles("member", "admin"),
+  async (req, res) => {
+    try {
+      const buletinId = req.params.id;
+      const { rating, comment } = req.body;
 
-    res.json({ message: "Deleted (soft)" });
-  } catch (err) {
-    console.error("DELETE BULETIN ERROR:", err);
-    res.status(500).json({ message: "Delete failed" });
-  }
-});
-
-router.post("/:id/review", authMiddleware, allowRoles("member", "admin"), async (req, res) => {
-  try {
-    const buletinId = req.params.id;
-    const { rating, comment } = req.body;
-
-    const buletin = await pool.query(
-      `
+      const buletin = await pool.query(
+        `
       SELECT b.id, r.role_name AS created_by_role
       FROM hses_buletin b
       JOIN users u ON u.id = b.created_by
@@ -299,41 +338,53 @@ router.post("/:id/review", authMiddleware, allowRoles("member", "admin"), async 
         AND bs.site_id = $2
         AND b.deleted_at IS NULL
       `,
-      [buletinId, req.user.site_id]
-    );
+        [buletinId, req.user.site_id],
+      );
 
-    if (buletin.rowCount === 0)
-      return res.status(403).json({ message: "Anda tidak berhak mereview buletin ini" });
+      if (buletin.rowCount === 0)
+        return res
+          .status(403)
+          .json({ message: "Anda tidak berhak mereview buletin ini" });
 
-    const createdByRole = buletin.rows[0].created_by_role;
-    if (req.user.role === "admin" && createdByRole !== "superadmin")
-      return res.status(403).json({ message: "Admin hanya boleh mereview buletin dari superadmin" });
+      const createdByRole = buletin.rows[0].created_by_role;
+      if (req.user.role === "admin" && createdByRole !== "superadmin")
+        return res
+          .status(403)
+          .json({
+            message: "Admin hanya boleh mereview buletin dari superadmin",
+          });
 
-    const exist = await pool.query(
-      `SELECT 1 FROM hses_buletin_reviews WHERE buletin_id = $1 AND user_id = $2`,
-      [buletinId, req.user.id]
-    );
+      const exist = await pool.query(
+        `SELECT 1 FROM hses_buletin_reviews WHERE buletin_id = $1 AND user_id = $2`,
+        [buletinId, req.user.id],
+      );
 
-    if (exist.rowCount > 0)
-      return res.status(400).json({ message: "Anda sudah review" });
+      if (exist.rowCount > 0)
+        return res.status(400).json({ message: "Anda sudah review" });
 
-    await pool.query(
-      `INSERT INTO hses_buletin_reviews (buletin_id, user_id, rating, comment) VALUES ($1,$2,$3,$4)`,
-      [buletinId, req.user.id, rating, comment]
-    );
+      await pool.query(
+        `INSERT INTO hses_buletin_reviews (buletin_id, user_id, rating, comment) VALUES ($1,$2,$3,$4)`,
+        [buletinId, req.user.id, rating, comment],
+      );
 
-    res.json({ message: "Review berhasil" });
-  } catch (err) {
-    console.error("POST BULETIN REVIEW ERROR:", err);
-    res.status(500).json({ message: "Review gagal" });
-  }
-});
+      res.json({ message: "Review berhasil" });
+    } catch (err) {
+      console.error("POST BULETIN REVIEW ERROR:", err);
+      res.status(500).json({ message: "Review gagal" });
+    }
+  },
+);
 
-router.get("/table", authMiddleware, allowRoles("admin", "superadmin"), async (req, res) => {
-  try {
-    const { role, site_id } = req.user;
+router.get(
+  "/table",
+  authMiddleware,
+  allowRoles("admin", "superadmin"),
+  auditMiddleware("Buletin Review Table"),
+  async (req, res) => {
+    try {
+      const { role, site_id } = req.user;
 
-    const sql = `
+      const sql = `
       SELECT
         r.id AS review_id,
         r.rating,
@@ -358,16 +409,17 @@ router.get("/table", authMiddleware, allowRoles("admin", "superadmin"), async (r
       ORDER BY r.created_at DESC
     `;
 
-    const params = role === "admin" ? [site_id] : [];
-    const result = await pool.query(sql, params);
-    res.json(result.rows);
-  } catch (err) {
-    console.error("FETCH BULETIN TABLE ERROR:", err);
-    res.status(500).json({ message: "Failed to fetch review table" });
-  }
-});
+      const params = role === "admin" ? [site_id] : [];
+      const result = await pool.query(sql, params);
+      res.json(result.rows);
+    } catch (err) {
+      console.error("FETCH BULETIN TABLE ERROR:", err);
+      res.status(500).json({ message: "Failed to fetch review table" });
+    }
+  },
+);
 
-router.get("/:id/review", authMiddleware, async (req, res) => {
+router.get("/:id/review", authMiddleware, auditMiddleware("Buletin Review"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -384,7 +436,7 @@ router.get("/:id/review", authMiddleware, async (req, res) => {
       WHERE r.buletin_id = $1
       ORDER BY r.created_at DESC
       `,
-      [id]
+      [id],
     );
 
     res.json(result.rows);
@@ -394,7 +446,7 @@ router.get("/:id/review", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/:id/rating", authMiddleware, async (req, res) => {
+router.get("/:id/rating", authMiddleware, auditMiddleware("Buletin Review"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -406,7 +458,7 @@ router.get("/:id/rating", authMiddleware, async (req, res) => {
       FROM hses_buletin_reviews
       WHERE buletin_id = $1
       `,
-      [id]
+      [id],
     );
 
     res.json(result.rows[0]);
@@ -419,8 +471,9 @@ router.get("/:id/rating", authMiddleware, async (req, res) => {
 router.get(
   "/export.xlsx",
   authMiddleware,
-  allowRoles("admin", "superadmin"),
+  allowRoles("admin", "superadmin"),  
   ensureExcelDownloadAccess("buletin"),
+  auditMiddleware("Buletin"),
   async (req, res) => {
     try {
       const { role, site_id } = req.user;
@@ -433,7 +486,7 @@ router.get(
         ORDER BY exported_at DESC
         LIMIT 1
         `,
-        [req.user.id, "buletin"]
+        [req.user.id, "buletin"],
       );
 
       if (lastExport.rowCount > 0) {
@@ -522,7 +575,11 @@ router.get(
       const title = ws.getCell("A1");
       title.value = "LAPORAN EXPORT BULETIN";
       title.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
-      title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D63FF" } };
+      title.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1D63FF" },
+      };
       title.alignment = { horizontal: "center", vertical: "middle" };
       ws.getRow(1).height = 28;
 
@@ -544,8 +601,16 @@ router.get(
 
       header.eachCell((cell) => {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF2563EB" },
+        };
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+          wrapText: true,
+        };
       });
 
       // ====== HELPER ======
@@ -553,13 +618,25 @@ router.get(
         const r = String(role).toLowerCase();
 
         if (r === "superadmin") {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDCFCE7" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFDCFCE7" },
+          };
           cell.font = { bold: true, color: { argb: "FF166534" } };
         } else if (r === "admin") {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
           cell.font = { bold: true, color: { argb: "FF92400E" } };
         } else if (r === "member") {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFDBEAFE" },
+          };
           cell.font = { bold: true, color: { argb: "FF1D4ED8" } };
         }
 
@@ -570,10 +647,18 @@ router.get(
         const r = Number(val);
 
         if (r >= 1 && r <= 2) {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEE2E2" },
+          };
           cell.font = { bold: true, color: { argb: "FF991B1B" } };
         } else if (r >= 3) {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFEF3C7" },
+          };
           cell.font = { bold: true, color: { argb: "FF92400E" } };
         }
 
@@ -599,7 +684,11 @@ router.get(
 
         if (i % 2 === 0) {
           r.eachCell((c) => {
-            c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+            c.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFF9FAFB" },
+            };
           });
         }
 
@@ -615,13 +704,13 @@ router.get(
 
       await pool.query(
         `INSERT INTO export_logs (user_id, site_id, feature) VALUES ($1,$2,$3)`,
-        [req.user.id, req.user.site_id, "buletin"]
+        [req.user.id, req.user.site_id, "buletin"],
       );
     } catch (err) {
       console.error("EXPORT BULETIN ERROR:", err);
       res.status(500).json({ message: "Export gagal" });
     }
-  }
+  },
 );
 
 module.exports = router;

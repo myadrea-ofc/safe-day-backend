@@ -1,14 +1,16 @@
 function sanitizePayload(payload = {}) {
   const hiddenFields = [
-    "password",
-    "token",
-    "access_token",
-    "refresh_token",
-    "authorization",
-    "otp",
-    "pin",
-    "fcm_token",
-  ];
+  "password",
+  "oldPassword",
+  "newPassword",
+  "token",
+  "access_token",
+  "refresh_token",
+  "authorization",
+  "otp",
+  "pin",
+  "fcm_token",
+];
 
   const cleanPayload = { ...payload };
 

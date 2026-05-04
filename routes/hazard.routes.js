@@ -6,6 +6,7 @@ const pool = require("../config/db");
 const multer = require("multer");
 const authMiddleware = require("../middlewares/auth.middleware");
 const ExcelJS = require("exceljs");
+const auditMiddleware = require("../middlewares/audit.middleware");
 
 // === MULTER ===
 const storage = multer.diskStorage({
@@ -58,6 +59,7 @@ router.post(
   "/",
   authMiddleware,
   upload.fields([{ name: "foto1" }, { name: "foto2" }, { name: "foto3" }]),
+  auditMiddleware("HAZARD"),
   async (req, res) => {
     try {
       console.log("Body:", req.body);
@@ -171,7 +173,11 @@ router.post(
   },
 );
 
-router.get("/", authMiddleware, async (req, res) => {
+router.get(
+  "/",
+  authMiddleware,
+  auditMiddleware("Hazard"),
+  async (req, res) => {
   try {
     const { role, site_id } = req.user;
 
@@ -208,6 +214,7 @@ router.get(
   "/export.xlsx",
   authMiddleware,
   ensureExcelDownloadAccess("hazard"),
+  auditMiddleware("Hazard"),
   async (req, res) => {
     try {
       const { role, site_id } = req.user;

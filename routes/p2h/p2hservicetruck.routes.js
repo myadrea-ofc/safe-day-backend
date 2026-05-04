@@ -5,6 +5,7 @@ const multer = require("multer");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
+const auditMiddleware = require("../../middlewares/audit.middleware");
 
 // ===================== MULTER =====================
 if (!fs.existsSync("uploads")) {
@@ -62,6 +63,7 @@ function ensureExcelDownloadAccess(feature) {
 router.post(
   "/",
   authMiddleware,
+  auditMiddleware("P2H Service Truck"),
   (req, res) => {
     upload.array("files", 5)(req, res, async (err) => {
       if (err instanceof multer.MulterError) {
@@ -273,7 +275,7 @@ try{
 )
 
 // ===================== GET =====================
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", authMiddleware, auditMiddleware("P2H Service Truck"), async (req, res) => {
   try {
     const { role, site_id } = req.user;
 
@@ -298,6 +300,7 @@ router.get("/", authMiddleware, async (req, res) => {
 router.get(
   "/export.xlsx",
   authMiddleware,
+  auditMiddleware("P2H Service Truck"),
   ensureExcelDownloadAccess("p2h_service_truck"),
   async (req, res) => {
     try {

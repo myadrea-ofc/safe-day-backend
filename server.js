@@ -99,6 +99,10 @@ const {
   sanitizePayload,
 } = require("./helpers/auditLog.helper");
 
+const auditLogRoutes = require("./routes/auditlog.routes");
+
+app.use("/audit-logs", auditLogRoutes);
+
 app.use("/auth", authRoutes);
 
 app.use("/api/events", eventRoutes);

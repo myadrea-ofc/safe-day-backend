@@ -12,6 +12,7 @@ const pool = require("../../config/db");
 
 const authMiddleware = require("../../middlewares/auth.middleware");
 const allowRoles = require("../../middlewares/role.middleware");
+const auditMiddleware = require("../../middlewares/audit.middleware");
 
 /* ===================== MULTER ===================== */
 if (!fs.existsSync("uploads")) {
@@ -64,6 +65,7 @@ router.post(
   authMiddleware,
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
+  auditMiddleware("Daily Plan"),
   async (req, res) => {
     try {
       const { judul, subJudul, deskripsi } = req.body;
@@ -144,7 +146,7 @@ router.post(
   },
 );
 
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", authMiddleware, auditMiddleware("Daily Plan"), async (req, res) => {
   try {
     const { role, site_id, id: user_id } = req.user;
 
@@ -207,6 +209,7 @@ router.put(
   authMiddleware,
   allowRoles("admin", "superadmin"),
   upload.single("gambar"),
+  auditMiddleware("Daily Plan"),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -304,6 +307,7 @@ router.delete(
   "/:id",
   authMiddleware,
   allowRoles("admin", "superadmin"),
+  auditMiddleware("Daily Plan"),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -345,6 +349,7 @@ router.post(
   "/:id/review",
   authMiddleware,
   allowRoles("member", "admin"),
+  auditMiddleware("Daily Plan Review"),
   async (req, res) => {
     try {
       const dailyPlanId = req.params.id;
@@ -418,6 +423,7 @@ router.get(
   "/table",
   authMiddleware,
   allowRoles("admin", "superadmin"),
+  auditMiddleware("Daily Plan Review Table"),
   async (req, res) => {
     try {
       const { role, site_id } = req.user;
@@ -465,7 +471,7 @@ ORDER BY r.created_at DESC;
 );
 
 /*  GET REVIEW PER DAILY PLAN (DETAIL PAGE) */
-router.get("/:id/review", authMiddleware, async (req, res) => {
+router.get("/:id/review", authMiddleware, auditMiddleware("Daily Plan Review"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -493,7 +499,7 @@ router.get("/:id/review", authMiddleware, async (req, res) => {
 });
 
 /*  GET RATING SUMMARY (CARD / DETAIL) */
-router.get("/:id/rating", authMiddleware, async (req, res) => {
+router.get("/:id/rating", authMiddleware, auditMiddleware("Daily Plan Review"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -520,6 +526,7 @@ router.get(
   authMiddleware,
   allowRoles("admin", "superadmin"),
   ensureExcelDownloadAccess("daily_plan"),
+  auditMiddleware("Daily Plant"),
   async (req, res) => {
     try {
       const { role, site_id } = req.user;
