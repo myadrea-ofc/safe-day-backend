@@ -120,11 +120,7 @@ router.post(
   },
 );
 
-router.get(
-  "/",
-  authMiddleware,
-  auditMiddleware("P5M"),
-  async (req, res) => {
+router.get("/", authMiddleware, auditMiddleware("P5M"), async (req, res) => {
   try {
     const { role, site_id } = req.user;
 
@@ -251,7 +247,6 @@ router.get(
           message: `Data terlalu besar (${result.rows.length} rows). Maksimal ${MAX_EXPORT_ROWS} rows.`,
         });
       }
-
       const now = new Date();
 
       const formattedDate = now
@@ -259,6 +254,10 @@ router.get(
           timeZone: "Asia/Jakarta",
         })
         .replace(/\//g, "-");
+
+      const generatedAtText = now.toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+      });
 
       const fileName = `P5M_${formattedDate}.xlsx`;
 

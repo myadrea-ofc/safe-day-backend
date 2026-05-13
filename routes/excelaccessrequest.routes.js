@@ -12,7 +12,7 @@ router.post("/", authMiddleware, allowRoles("member"), auditMiddleware("Create E
 router.get("/me", authMiddleware, allowRoles("member"), auditMiddleware("Get Excel Access Requests"), controller.getMyLatestRequest);
 
 // ADMIN / SUPERADMIN
-router.get("/", authMiddleware, allowRoles("admin", "superadmin"), auditMiddleware("List Excel Access Requests"), controller.listRequests);
+router.get("/", authMiddleware, allowRoles("admin", "superadmin"), controller.listRequests);
 router.post("/:id/approve", authMiddleware, allowRoles("admin", "superadmin"), auditMiddleware("Approve Excel Access Request"), controller.approveRequest);
 router.post("/:id/reject", authMiddleware, allowRoles("admin", "superadmin"), auditMiddleware("Reject Excel Access Request"), controller.rejectRequest);
 
