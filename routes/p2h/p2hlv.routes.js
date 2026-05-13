@@ -913,7 +913,7 @@ router.get(
 
         for (let j = 0; j < 5; j++) {
           const uploadedFileName = parsedFiles[j];
-          const fileCell = excelRow.getCell(54 + j);
+          const fileCell = excelRow.getCell(53 + j);
 
           const baseUrl = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 
