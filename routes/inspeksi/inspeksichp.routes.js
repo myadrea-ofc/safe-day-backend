@@ -203,7 +203,6 @@ router.post(
 router.get(
   "/",
   authMiddleware,
-  auditMiddleware("Inspeksi CHP"),
   async (req, res) => {
   try {
     const { role, site_id } = req.user;

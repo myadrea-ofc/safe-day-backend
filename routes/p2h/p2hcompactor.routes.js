@@ -263,8 +263,7 @@ router.post("/", authMiddleware, auditMiddleware("P2H Compactor"), (req, res) =>
   });
 });
 
-// ===================== GET =====================
-router.get("/", authMiddleware, auditMiddleware("P2H Compactor"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 

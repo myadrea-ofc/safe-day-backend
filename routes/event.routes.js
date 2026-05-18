@@ -12,7 +12,6 @@ router.get(
   "/hses-event",
   authMiddleware,
   allowRoles("superadmin", "admin", "member"),
-  auditMiddleware("Event"),
   async (req, res) => {
     res.json({ message: "List event" });
   }

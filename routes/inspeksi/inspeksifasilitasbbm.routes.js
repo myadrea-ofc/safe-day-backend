@@ -204,7 +204,7 @@ router.post(
   },
 );
 
-router.get("/", authMiddleware, auditMiddleware("Inspeksi Fasilitas BBM"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 

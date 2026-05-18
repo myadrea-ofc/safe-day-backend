@@ -126,7 +126,6 @@ router.get(
 router.get(
   "/",
   allowRoles("admin", "superadmin"),
-  auditMiddleware("User Management"),
   async (req, res) => {
     try {
       const {

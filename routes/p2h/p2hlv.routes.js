@@ -244,8 +244,7 @@ const query = `
   }
 )
 
-// ===================== GET =====================
-router.get("/", authMiddleware, auditMiddleware("P2H LV"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 

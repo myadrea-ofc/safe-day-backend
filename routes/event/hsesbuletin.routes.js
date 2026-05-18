@@ -379,7 +379,6 @@ router.get(
   "/table",
   authMiddleware,
   allowRoles("admin", "superadmin"),
-  auditMiddleware("Buletin Review Table"),
   async (req, res) => {
     try {
       const { role, site_id } = req.user;
@@ -419,7 +418,7 @@ router.get(
   },
 );
 
-router.get("/:id/review", authMiddleware, auditMiddleware("Buletin Review"), async (req, res) => {
+router.get("/:id/review", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -446,7 +445,7 @@ router.get("/:id/review", authMiddleware, auditMiddleware("Buletin Review"), asy
   }
 });
 
-router.get("/:id/rating", authMiddleware, auditMiddleware("Buletin Review"), async (req, res) => {
+router.get("/:id/rating", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -471,7 +470,7 @@ router.get("/:id/rating", authMiddleware, auditMiddleware("Buletin Review"), asy
 router.get(
   "/export.xlsx",
   authMiddleware,
-  allowRoles("admin", "superadmin"),  
+  allowRoles("admin", "superadmin"),
   ensureExcelDownloadAccess("buletin"),
   auditMiddleware("Buletin"),
   async (req, res) => {
@@ -504,48 +503,79 @@ router.get(
       const { start, end } = req.query;
 
       const params = [];
-      let where = `WHERE b.deleted_at IS NULL`;
-
-      if (role === "admin") {
-        params.push(site_id);
-        where += ` AND s.id = $${params.length}`;
-      }
+      let dateFilter = "";
+      let siteFilter = "";
 
       if (start) {
         params.push(start);
-        where += ` AND r.created_at >= $${params.length}`;
+        dateFilter += ` AND r.created_at >= $${params.length}`;
       }
 
       if (end) {
         params.push(end);
-        where += ` AND r.created_at < $${params.length}`;
+        dateFilter += ` AND r.created_at < $${params.length}`;
       }
 
-      const query = `
+      if (role === "admin") {
+        params.push(site_id);
+        siteFilter = ` AND s.id = $${params.length}`;
+      }
+
+      const sql = `
         SELECT
           r.id AS review_id,
           r.rating,
           r.comment,
           r.created_at,
+
           u.name AS user_name,
           COALESCE(ur.role_name, '-') AS user_role,
           COALESCE(d.department_name, '-') AS department_name,
           COALESCE(s.site_name, '-') AS site_name,
+
           b.judul AS buletin_title,
           COALESCE(cr.role_name, '-') AS creator_role
+
         FROM hses_buletin_reviews r
         JOIN users u ON u.id = r.user_id
         LEFT JOIN roles ur ON ur.id = u.role_id
         LEFT JOIN departments d ON d.id = u.department_id
         LEFT JOIN sites s ON s.id = u.site_id
+
         JOIN hses_buletin b ON b.id = r.buletin_id
         JOIN users cu ON cu.id = b.created_by
         LEFT JOIN roles cr ON cr.id = cu.role_id
-        ${where}
+
+        WHERE b.deleted_at IS NULL
+        ${siteFilter}
+        ${dateFilter}
         ORDER BY r.created_at DESC
       `;
 
-      const result = await pool.query(query, params);
+      const result = await pool.query(sql, params);
+
+      const MAX_EXPORT_ROWS = 50000;
+      if (result.rows.length > MAX_EXPORT_ROWS) {
+        return res.status(400).json({
+          message: `Data terlalu besar (${result.rows.length} rows). Maksimal ${MAX_EXPORT_ROWS} rows.`,
+        });
+      }
+
+      const now = new Date();
+      const formattedDate = now
+        .toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })
+        .replace(/\//g, "-");
+
+      const exportFileName = `BULETIN_${formattedDate}.xlsx`;
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${exportFileName}"`,
+      );
 
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
         stream: res,
@@ -553,38 +583,212 @@ router.get(
         useSharedStrings: true,
       });
 
-      const ws = workbook.addWorksheet("Buletin Export");
-      ws.views = [{ state: "frozen", ySplit: 4 }];
+      const worksheet = workbook.addWorksheet("Buletin Export");
+      worksheet.views = [{ state: "frozen", ySplit: 4 }];
 
-      // ====== COLUMN ======
-      ws.columns = [
-        { width: 8 },
-        { width: 28 },
-        { width: 16 },
-        { width: 22 },
-        { width: 24 },
-        { width: 40 },
-        { width: 18 },
-        { width: 14 },
-        { width: 40 },
-        { width: 20 },
+      function formatDateOnly(value) {
+        if (!value) return "-";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+        return d.toLocaleDateString("id-ID", {
+          timeZone: "Asia/Jakarta",
+        });
+      }
+
+      function formatDateTime(value) {
+        if (!value) return "-";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+
+        return d.toLocaleString("id-ID", {
+          timeZone: "Asia/Jakarta",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+      }
+
+      function normalizeCellValue(value) {
+        return String(value || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function applyRoleChip(cell, rawValue) {
+        const value = normalizeCellValue(rawValue);
+
+        const styles = {
+          superadmin: {
+            fill: "FFDCFCE7",
+            font: "FF166534",
+          },
+          admin: {
+            fill: "FFFEF3C7",
+            font: "FF92400E",
+          },
+          member: {
+            fill: "FFDBEAFE",
+            font: "FF1D4ED8",
+          },
+        };
+
+        const style = styles[value];
+        if (!style) return;
+
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: style.fill },
+        };
+        cell.font = {
+          bold: true,
+          size: 10,
+          color: { argb: style.font },
+        };
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+          wrapText: true,
+        };
+      }
+
+      function applyRatingStyle(cell, rawValue) {
+        const rating = Number(rawValue);
+
+        if (Number.isNaN(rating)) return;
+
+        let fill = "FFF3F4F6";
+        let font = "FF374151";
+
+        if (rating >= 1 && rating <= 2) {
+          fill = "FFFEE2E2";
+          font = "FF991B1B";
+        } else if (rating >= 3 && rating <= 5) {
+          fill = "FFFEF3C7";
+          font = "FF92400E";
+        }
+
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: fill },
+        };
+
+        cell.font = {
+          bold: true,
+          size: 10,
+          color: { argb: font },
+        };
+
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+          wrapText: true,
+        };
+      }
+
+      worksheet.columns = [
+        { key: "no", width: 8 },
+        { key: "reviewer", width: 32 },
+        { key: "role", width: 18 },
+        { key: "site", width: 22 },
+        { key: "department", width: 28 },
+        { key: "buletin", width: 42 },
+        { key: "creator_role", width: 20 },
+        { key: "rating", width: 16 },
+        { key: "komentar", width: 46 },
+        { key: "tanggal", width: 22 },
       ];
 
-      // ====== TITLE ======
-      ws.mergeCells("A1:J1");
-      const title = ws.getCell("A1");
-      title.value = "LAPORAN EXPORT BULETIN";
-      title.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
-      title.fill = {
+      function getExcelColumnName(columnNumber) {
+        let dividend = columnNumber;
+        let columnName = "";
+
+        while (dividend > 0) {
+          const modulo = (dividend - 1) % 26;
+          columnName = String.fromCharCode(65 + modulo) + columnName;
+          dividend = Math.floor((dividend - modulo) / 26);
+        }
+
+        return columnName;
+      }
+
+      const lastColumnLetter = getExcelColumnName(worksheet.columns.length);
+
+      worksheet.mergeCells(`A1:${lastColumnLetter}1`);
+      const titleCell = worksheet.getCell("A1");
+      titleCell.value = "LAPORAN EXPORT BULETIN";
+      titleCell.font = {
+        bold: true,
+        size: 16,
+        color: { argb: "FFFFFFFF" },
+      };
+      titleCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      titleCell.fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FF1D63FF" },
       };
-      title.alignment = { horizontal: "center", vertical: "middle" };
-      ws.getRow(1).height = 28;
+      worksheet.getRow(1).height = 28;
 
-      // ====== HEADER ======
-      const header = ws.addRow([
+      worksheet.mergeCells(`A2:${lastColumnLetter}2`);
+      const infoCell = worksheet.getCell("A2");
+      let currentUserSiteName = "-";
+
+      if (req.user.site_id) {
+        const siteRes = await pool.query(
+          `SELECT site_name FROM sites WHERE id = $1 LIMIT 1`,
+          [req.user.site_id],
+        );
+
+        if (siteRes.rowCount > 0) {
+          currentUserSiteName = siteRes.rows[0].site_name;
+        }
+      }
+
+      const generatedAtText = now.toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+
+      infoCell.value = `Generated By: ${req.user.name || req.user.id} | Role: ${
+        req.user.role
+      } | Site: ${currentUserSiteName} | Generated At: ${generatedAtText}`;
+      infoCell.font = {
+        italic: true,
+        size: 11,
+        color: { argb: "FF374151" },
+      };
+      infoCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      infoCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF3F4F6" },
+      };
+      worksheet.getRow(2).height = 22;
+
+      worksheet.addRow([]).commit();
+
+      const headerRow = worksheet.addRow([
         "No",
         "Reviewer",
         "Role",
@@ -597,120 +801,113 @@ router.get(
         "Tanggal",
       ]);
 
-      header.height = 50;
+      headerRow.height = 50;
 
-      header.eachCell((cell) => {
-        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF2563EB" },
+      headerRow.eachCell((cell) => {
+        cell.font = {
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+          size: 11,
         };
         cell.alignment = {
           horizontal: "center",
           vertical: "middle",
           wrapText: true,
         };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF2563EB" },
+        };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFD1D5DB" } },
+          left: { style: "thin", color: { argb: "FFD1D5DB" } },
+          bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
+          right: { style: "thin", color: { argb: "FFD1D5DB" } },
+        };
       });
 
-      // ====== HELPER ======
-      const roleStyle = (cell, role) => {
-        const r = String(role).toLowerCase();
+      headerRow.commit();
 
-        if (r === "superadmin") {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFDCFCE7" },
-          };
-          cell.font = { bold: true, color: { argb: "FF166534" } };
-        } else if (r === "admin") {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEF3C7" },
-          };
-          cell.font = { bold: true, color: { argb: "FF92400E" } };
-        } else if (r === "member") {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFDBEAFE" },
-          };
-          cell.font = { bold: true, color: { argb: "FF1D4ED8" } };
-        }
+      for (let i = 0; i < result.rows.length; i++) {
+        const row = result.rows[i];
 
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-      };
-
-      const ratingStyle = (cell, val) => {
-        const r = Number(val);
-
-        if (r >= 1 && r <= 2) {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEE2E2" },
-          };
-          cell.font = { bold: true, color: { argb: "FF991B1B" } };
-        } else if (r >= 3) {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFEF3C7" },
-          };
-          cell.font = { bold: true, color: { argb: "FF92400E" } };
-        }
-
-        cell.alignment = { horizontal: "center", vertical: "middle" };
-      };
-
-      // ====== DATA ======
-      result.rows.forEach((row, i) => {
-        const r = ws.addRow([
+        const excelRow = worksheet.addRow([
           i + 1,
-          row.user_name,
-          row.user_role,
-          row.site_name,
-          row.department_name,
-          row.buletin_title,
-          row.creator_role,
-          row.rating,
-          row.comment,
-          new Date(row.created_at).toLocaleDateString("id-ID"),
+          row.user_name ?? "-",
+          row.user_role ?? "-",
+          row.site_name ?? "-",
+          row.department_name ?? "-",
+          row.buletin_title ?? "-",
+          row.creator_role ?? "-",
+          row.rating ?? "-",
+          row.comment ?? "-",
+          formatDateOnly(row.created_at),
         ]);
 
-        r.height = 35;
+        excelRow.eachCell((cell, colNumber) => {
+          cell.alignment = {
+            vertical: "middle",
+            horizontal:
+              colNumber === 1 || colNumber === 8 || colNumber === 10
+                ? "center"
+                : "left",
+            wrapText: true,
+          };
+
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFE5E7EB" } },
+            left: { style: "thin", color: { argb: "FFE5E7EB" } },
+            bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+            right: { style: "thin", color: { argb: "FFE5E7EB" } },
+          };
+
+          cell.font = {
+            size: 10,
+            color: { argb: "FF111827" },
+          };
+        });
+
+        applyRoleChip(excelRow.getCell(3), row.user_role);
+        applyRoleChip(excelRow.getCell(7), row.creator_role);
+        applyRatingStyle(excelRow.getCell(8), row.rating);
+
+        excelRow.height = 35;
 
         if (i % 2 === 0) {
-          r.eachCell((c) => {
-            c.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFF9FAFB" },
-            };
+          excelRow.eachCell((cell) => {
+            if (!cell.fill) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFF9FAFB" },
+              };
+            }
           });
         }
 
-        roleStyle(r.getCell(3), row.user_role);
-        roleStyle(r.getCell(7), row.creator_role);
-        ratingStyle(r.getCell(8), row.rating);
+        excelRow.commit();
+      }
 
-        r.commit();
-      });
-
-      ws.commit();
+      worksheet.commit();
       await workbook.commit();
 
       await pool.query(
-        `INSERT INTO export_logs (user_id, site_id, feature) VALUES ($1,$2,$3)`,
+        `
+        INSERT INTO export_logs (user_id, site_id, feature)
+        VALUES ($1, $2, $3)
+        `,
         [req.user.id, req.user.site_id, "buletin"],
       );
     } catch (err) {
-      console.error("EXPORT BULETIN ERROR:", err);
-      res.status(500).json({ message: "Export gagal" });
+      console.error("BULETIN EXPORT XLSX ERROR:", err);
+
+      if (!res.headersSent) {
+        return res.status(500).json({ message: "Export failed" });
+      } else {
+        return res.end();
+      }
     }
   },
 );
-
 module.exports = router;

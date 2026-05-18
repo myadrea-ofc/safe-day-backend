@@ -288,7 +288,7 @@ router.post("/", authMiddleware, auditMiddleware("P2H Crane"), (req, res) => {
 });
 
 // ===================== GET =====================
-router.get("/", authMiddleware, auditMiddleware("P2H Crane"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 

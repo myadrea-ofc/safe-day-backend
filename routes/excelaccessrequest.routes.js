@@ -9,7 +9,7 @@ const controller = require("../controllers/excel.access.request.controller");
 
 // MEMBER
 router.post("/", authMiddleware, allowRoles("member"), auditMiddleware("Create Excel Access Request"), controller.createRequest);
-router.get("/me", authMiddleware, allowRoles("member"), auditMiddleware("Get Excel Access Requests"), controller.getMyLatestRequest);
+router.get("/me", authMiddleware, allowRoles("member"), controller.getMyLatestRequest);
 
 // ADMIN / SUPERADMIN
 router.get("/", authMiddleware, allowRoles("admin", "superadmin"), controller.listRequests);

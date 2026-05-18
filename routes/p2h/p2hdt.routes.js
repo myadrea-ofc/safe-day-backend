@@ -277,8 +277,7 @@ router.post("/", authMiddleware, auditMiddleware("P2H Heavy Duty"), (req, res) =
   });
 });
 
-// ===================== GET =====================
-router.get("/", authMiddleware, auditMiddleware("P2H Heavy Duty"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 

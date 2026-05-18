@@ -206,7 +206,7 @@ router.post(
   },
 );
 
-router.get("/", authMiddleware, auditMiddleware("Inspeksi Kantor"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;
 
