@@ -176,7 +176,6 @@ router.post(
 router.get(
   "/",
   authMiddleware,
-  auditMiddleware("Hazard"),
   async (req, res) => {
   try {
     const { role, site_id } = req.user;

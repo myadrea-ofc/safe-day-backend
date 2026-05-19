@@ -274,7 +274,6 @@ try{
   }
 )
 
-// ===================== GET =====================
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id } = req.user;

@@ -173,7 +173,6 @@ router.post(
 router.get(
   "/",
   authMiddleware,
-  auditMiddleware("LPI"),
   async (req, res) => {
   try {
     const { role, site_id } = req.user;

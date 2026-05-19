@@ -146,7 +146,7 @@ router.post(
   },
 );
 
-router.get("/", authMiddleware, auditMiddleware("Buletin"), async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const { role, site_id, id: user_id } = req.user;
     const params = [user_id];
